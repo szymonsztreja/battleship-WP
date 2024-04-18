@@ -14,11 +14,11 @@ import (
 // 	Target_nick
 // }
 
-type Game struct {
+type GameClient struct {
 	token string
 }
 
-func InitGame(game *Game) string {
+func InitGame(gameClient *GameClient) string {
 	posturl := "https://go-pjatk-server.fly.dev/api/game"
 
 	body := []byte(`{
@@ -67,7 +67,7 @@ func InitGame(game *Game) string {
 
 	xAuthToken := res.Header.Get("X-Auth-Token")
 
-	game.token := xAuthToken
+	gameClient.token = xAuthToken
 
 	fmt.Println(xAuthToken)
 
@@ -78,12 +78,12 @@ type BoardStruct struct {
 	Board []string `json:"board"`
 }
 
-func Board(game *Game) ([]string, error) {
+func Board(gameClient *GameClient) ([]string, error) {
 	requestURL := "https://go-pjatk-server.fly.dev/api/game/board"
 
 	client := &http.Client{}
 	req, _ := http.NewRequest("GET", requestURL, nil)
-	req.Header.Set("X-Auth-Token", game.token)
+	req.Header.Set("X-Auth-Token", gameClient.token)
 	res, err := client.Do(req)
 
 	if err != nil {
@@ -111,12 +111,13 @@ type GameStatus struct {
 	Timer          int    `json:"timer"`
 }
 
-func Status(game *Game) (*StatusResponse, error) {
+// *StatusResponse
+func Status(gameClient *GameClient) (int, error) {
 	requestURL := "https://go-pjatk-server.fly.dev/api/game/board"
 
 	client := &http.Client{}
 	req, _ := http.NewRequest("GET", requestURL, nil)
-	req.Header.Set("X-Auth-Token", game.token)
+	req.Header.Set("X-Auth-Token", gameClient.token)
 	res, err := client.Do(req)
 
 	if err != nil {
@@ -134,4 +135,32 @@ func Status(game *Game) (*StatusResponse, error) {
 	return res.StatusCode, err
 }
 
-// func Fire(coord string) (string, error)
+type FireStruct struct {
+	Coord string `json:"coord"`
+}
+
+func Fire(gameClient *GameClient, coord string) (string, error) {
+	posturl := "https://go-pjatk-server.fly.dev/api/game/fire"
+
+	var fire FireStruct
+	fire.Coord = coord
+	jsonFire, _ := json.Marshal(fire)
+
+	req, err := http.NewRequest(http.MethodPost, posturl, bytes.NewBuffer(jsonFire))
+	if err != nil {
+		panic(err)
+	}
+
+	req.Header.Set("X-Auth-Token", gameClient.token)
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{}
+	res, err := client.Do(req)
+	if err != nil {
+		panic(err)
+	}
+
+	defer res.Body.Close()
+
+	return
+}
