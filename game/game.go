@@ -15,6 +15,8 @@ func (g Game) Run() {
 	gameClient := &client.GameClient{}
 	gameStatus := &client.GameStatus{}
 	boardStruct := client.BoardStruct{}
+	fireResponse := &client.FireResponse{}
+
 	var err error
 
 	gameClient.InitGame()
@@ -35,24 +37,20 @@ func (g Game) Run() {
 		time.Sleep(1 * time.Second)
 	}
 
-	fmt.Println("Game status:", *gameStatus)
-
 	boardStruct.Board, err = gameClient.Board()
 	if err != nil {
 		fmt.Printf("error getting game board: %s\n", err)
 		return
 	}
 
-	// boardStruct.Board = boardArray
-
 	fmt.Println("Game status:", boardStruct)
 
-	board := board.New(board.NewConfig())
-	err = board.Import(boardStruct.Board)
+	b := board.New(board.NewConfig())
+	err = b.Import(boardStruct.Board)
 	if err != nil {
 		fmt.Println(err)
 	}
-	board.Display()
+	b.Display()
 
 	for {
 		gameStatus, err = gameClient.Status()
@@ -66,8 +64,70 @@ func (g Game) Run() {
 			return
 		} else {
 			if gameStatus.ShouldFire {
+				for _, shot := range gameStatus.OppShots {
 
+					state, err := b.HitOrMiss(board.Left, shot)
+					if err != nil {
+						fmt.Println(err)
+					}
+
+					err = b.Set(board.Left, shot, state)
+					if err != nil {
+						fmt.Println(err)
+					}
+				}
+				b.Display()
+				fmt.Println("Your turn!")
+
+				var prompt string
+				yourShot, ok := board.ReadLineWithTimer(prompt, 60*time.Second)
+				if ok {
+				}
+
+				fireResponse, err = gameClient.Fire(yourShot)
+				if err != nil {
+					fmt.Println(err)
+				}
+
+				SetRightBoard(fireResponse.Result, yourShot, b)
+
+			} else {
+				time.Sleep(1 * time.Second)
 			}
 		}
 	}
 }
+
+func SetRightBoard(s string, yourShot string, b *board.Board) {
+	var err error
+	switch s {
+	case "hit":
+		err = b.Set(board.Right, yourShot, board.Hit)
+		if err != nil {
+			fmt.Println(err)
+		}
+	case "miss":
+		err = b.Set(board.Right, yourShot, board.Miss)
+		if err != nil {
+			fmt.Println(err)
+		}
+	case "sunk":
+		err = b.Set(board.Right, yourShot, board.Hit)
+		if err != nil {
+			fmt.Println(err)
+		}
+	}
+}
+
+// func GetState(s string){
+// 	switch s {
+// 	case "hit":
+// 		state := board.Hit
+// 	case "miss":
+// 		state := board.Miss
+// 	case "sunk":
+// 		state := board.Hit
+// 	}
+
+// 	return state
+// }

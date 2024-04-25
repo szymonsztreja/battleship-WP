@@ -143,7 +143,7 @@ type FireResponse struct {
 	Result string `json:"result"`
 }
 
-func (gameClient *GameClient) Fire(coord string) (string, error) {
+func (gameClient *GameClient) Fire(coord string) (*FireResponse, error) {
 	posturl := "https://go-pjatk-server.fly.dev/api/game/fire"
 
 	var fire FireStruct
@@ -172,5 +172,5 @@ func (gameClient *GameClient) Fire(coord string) (string, error) {
 		fmt.Printf("error decoding http request: %s\n", err)
 	}
 
-	return fireResponse.Result, err
+	return &fireResponse, err
 }
