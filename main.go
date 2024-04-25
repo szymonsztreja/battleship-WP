@@ -1,12 +1,10 @@
 package main
 
 import (
-	"battleship-WP/client"
-	"fmt"
+	"battleship-WP/game"
 )
 
 func main() {
-	token := client.InitGame()
-	sth, _ := client.Board(token)
-	fmt.Println(sth)
+	game := game.Game{}
+	game.Run()
 }

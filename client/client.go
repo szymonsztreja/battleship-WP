@@ -15,10 +15,10 @@ import (
 // }
 
 type GameClient struct {
-	token string
+	Token string
 }
 
-func InitGame(gameClient *GameClient) string {
+func (gameClient *GameClient) InitGame() string {
 	posturl := "https://go-pjatk-server.fly.dev/api/game"
 
 	body := []byte(`{
@@ -67,9 +67,9 @@ func InitGame(gameClient *GameClient) string {
 
 	xAuthToken := res.Header.Get("X-Auth-Token")
 
-	gameClient.token = xAuthToken
+	gameClient.Token = xAuthToken
 
-	fmt.Println(xAuthToken)
+	// fmt.Println(xAuthToken)
 
 	return xAuthToken
 }
@@ -78,12 +78,12 @@ type BoardStruct struct {
 	Board []string `json:"board"`
 }
 
-func Board(gameClient *GameClient) ([]string, error) {
+func (gameClient *GameClient) Board() ([]string, error) {
 	requestURL := "https://go-pjatk-server.fly.dev/api/game/board"
 
 	client := &http.Client{}
 	req, _ := http.NewRequest("GET", requestURL, nil)
-	req.Header.Set("X-Auth-Token", gameClient.token)
+	req.Header.Set("X-Auth-Token", gameClient.Token)
 	res, err := client.Do(req)
 
 	if err != nil {
@@ -102,22 +102,22 @@ func Board(gameClient *GameClient) ([]string, error) {
 }
 
 type GameStatus struct {
-	GameStatus     string `json:"board"`
-	LastGameStatus string `json:"last_game_status"`
-	Nick           string `json:"nick"`
-	OppShots       string `json:"opp_shots"`
-	Opponent       string `json:"opponent"`
-	ShouldFire     bool   `json:"should_fire"`
-	Timer          int    `json:"timer"`
+	Nick           string   `json:"nick"`
+	GameStatus     string   `json:"game_status"`
+	LastGameStatus string   `json:"last_game_status"`
+	Opponent       string   `json:"opponent"`
+	OppShots       []string `json:"opp_shots"`
+	ShouldFire     bool     `json:"should_fire"`
+	Timer          int      `json:"timer"`
 }
 
 // *StatusResponse
-func Status(gameClient *GameClient) (int, error) {
-	requestURL := "https://go-pjatk-server.fly.dev/api/game/board"
+func (gameClient *GameClient) Status() (*GameStatus, error) {
+	requestURL := "https://go-pjatk-server.fly.dev/api/game"
 
 	client := &http.Client{}
 	req, _ := http.NewRequest("GET", requestURL, nil)
-	req.Header.Set("X-Auth-Token", gameClient.token)
+	req.Header.Set("X-Auth-Token", gameClient.Token)
 	res, err := client.Do(req)
 
 	if err != nil {
@@ -132,14 +132,18 @@ func Status(gameClient *GameClient) (int, error) {
 		fmt.Printf("error decoding http request: %s\n", err)
 	}
 
-	return res.StatusCode, err
+	return &gameStatus, err
 }
 
 type FireStruct struct {
 	Coord string `json:"coord"`
 }
 
-func Fire(gameClient *GameClient, coord string) (string, error) {
+type FireResponse struct {
+	Result string `json:"result"`
+}
+
+func (gameClient *GameClient) Fire(coord string) (string, error) {
 	posturl := "https://go-pjatk-server.fly.dev/api/game/fire"
 
 	var fire FireStruct
@@ -151,7 +155,7 @@ func Fire(gameClient *GameClient, coord string) (string, error) {
 		panic(err)
 	}
 
-	req.Header.Set("X-Auth-Token", gameClient.token)
+	req.Header.Set("X-Auth-Token", gameClient.Token)
 	req.Header.Set("Content-Type", "application/json")
 
 	client := &http.Client{}
@@ -162,5 +166,11 @@ func Fire(gameClient *GameClient, coord string) (string, error) {
 
 	defer res.Body.Close()
 
-	return
+	var fireResponse FireResponse
+	err = json.NewDecoder(res.Body).Decode(&fireResponse)
+	if err != nil {
+		fmt.Printf("error decoding http request: %s\n", err)
+	}
+
+	return fireResponse.Result, err
 }
