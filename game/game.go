@@ -3,6 +3,7 @@ package game
 import (
 	"battleship-WP/client"
 	"fmt"
+	"net/http"
 	"time"
 
 	board "github.com/grupawp/warships-lightgui/v2"
@@ -11,6 +12,10 @@ import (
 type Game struct {
 }
 
+func (g Game) Run() {
+	httpClient := &client.HttpGameClient{
+		Client: &http.Client{},
+	}
 func (Game) Run() {
 	gameClient := &client.GameClient{}
 	gameStatus := &client.GameStatus{}
