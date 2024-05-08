@@ -3,6 +3,7 @@ package game
 import (
 	"battleship-WP/client"
 	"fmt"
+	"net/http"
 	"time"
 
 	board "github.com/grupawp/warships-lightgui/v2"
@@ -12,17 +13,19 @@ type Game struct {
 }
 
 func (g Game) Run() {
-	gameClient := &client.GameClient{}
+	httpClient := &client.HttpGameClient{
+		Client: &http.Client{},
+	}
 	gameStatus := &client.GameStatus{}
 	boardStruct := client.BoardStruct{}
 	fireResponse := &client.FireResponse{}
 
 	var err error
 
-	gameClient.InitGame()
-
+	dupa := httpClient.InitGame()
+	fmt.Println(dupa)
 	for {
-		gameStatus, err = gameClient.Status()
+		gameStatus, err = httpClient.Status()
 
 		fmt.Printf("Game status response: %+v\n", gameStatus.GameStatus)
 
@@ -37,7 +40,7 @@ func (g Game) Run() {
 		time.Sleep(1 * time.Second)
 	}
 
-	boardStruct.Board, err = gameClient.Board()
+	boardStruct.Board, err = httpClient.Board()
 	if err != nil {
 		fmt.Printf("error getting game board: %s\n", err)
 		return
@@ -53,7 +56,7 @@ func (g Game) Run() {
 	b.Display()
 
 	for {
-		gameStatus, err = gameClient.Status()
+		gameStatus, err = httpClient.Status()
 
 		if err != nil {
 			fmt.Printf("error getting game status : %s\n", err)
@@ -82,9 +85,10 @@ func (g Game) Run() {
 				var prompt string
 				yourShot, ok := board.ReadLineWithTimer(prompt, 60*time.Second)
 				if ok {
+
 				}
 
-				fireResponse, err = gameClient.Fire(yourShot)
+				fireResponse, err = httpClient.Fire(yourShot)
 				if err != nil {
 					fmt.Println(err)
 				}
@@ -118,16 +122,3 @@ func SetRightBoard(s string, yourShot string, b *board.Board) {
 		}
 	}
 }
-
-// func GetState(s string){
-// 	switch s {
-// 	case "hit":
-// 		state := board.Hit
-// 	case "miss":
-// 		state := board.Miss
-// 	case "sunk":
-// 		state := board.Hit
-// 	}
-
-// 	return state
-// }
