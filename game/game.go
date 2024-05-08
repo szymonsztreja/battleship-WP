@@ -12,18 +12,16 @@ import (
 type Game struct {
 }
 
-func (g Game) Run() {
+func (Game) Run() {
 	httpClient := &client.HttpGameClient{
 		Client: &http.Client{},
 	}
-func (Game) Run() {
-	gameClient := &client.GameClient{}
 	gameStatus := &client.GameStatus{}
 	var err error
 
-	gameClient.InitGame()
-	waitForGame(gameClient)
-	yourShips := getBoardGame(gameClient)
+	httpClient.InitGame()
+	waitForGame(httpClient)
+	yourShips := getBoardGame(httpClient)
 
 	b := board.New(board.NewConfig())
 	err = b.Import(yourShips)
@@ -31,7 +29,7 @@ func (Game) Run() {
 		fmt.Println(err)
 	}
 	for {
-		status := getGameStatus(gameClient)
+		status := getGameStatus(httpClient)
 
 		if status.GameStatus == "ended" {
 			fmt.Print("Game ended")
@@ -41,14 +39,14 @@ func (Game) Run() {
 			handleOppShots(gameStatus, b)
 			b.Display()
 			fmt.Println("Your turn!")
-			handleYourShots(gameClient, b)
+			handleYourShots(httpClient, b)
 		} else {
 			time.Sleep(1 * time.Second)
 		}
 	}
 }
 
-func handleYourShots(gameClient *client.GameClient, b *board.Board) {
+func handleYourShots(httpClient *client.HttpGameClient, b *board.Board) {
 	var err error
 	var prompt string
 	yourShot, ok := board.ReadLineWithTimer(prompt, 60*time.Second)
@@ -56,7 +54,7 @@ func handleYourShots(gameClient *client.GameClient, b *board.Board) {
 		fmt.Printf("There was a problem with reading line %v", ok)
 	}
 
-	fireResponse, err := gameClient.Fire(yourShot)
+	fireResponse, err := httpClient.Fire(yourShot)
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -78,9 +76,9 @@ func handleOppShots(gameStatus *client.GameStatus, b *board.Board) {
 	}
 }
 
-func getGameStatus(gameClient *client.GameClient) *client.GameStatus {
+func getGameStatus(httpClient *client.HttpGameClient) *client.GameStatus {
 	var err error
-	gameStatus, err := gameClient.Status()
+	gameStatus, err := httpClient.Status()
 
 	if err != nil {
 		fmt.Printf("error getting game status : %s\n", err)
@@ -88,17 +86,17 @@ func getGameStatus(gameClient *client.GameClient) *client.GameStatus {
 	return gameStatus
 }
 
-func getBoardGame(gameClient *client.GameClient) []string {
-	ships, err := gameClient.Board()
+func getBoardGame(httpClient *client.HttpGameClient) []string {
+	ships, err := httpClient.Board()
 	if err != nil {
 		fmt.Printf("error getting game board: %s\n", err)
 	}
 	return ships
 }
 
-func waitForGame(gameClient *client.GameClient) {
+func waitForGame(httpClient *client.HttpGameClient) {
 	for {
-		status := getGameStatus(gameClient)
+		status := getGameStatus(httpClient)
 
 		if status.GameStatus == "game_in_progress" {
 			break
