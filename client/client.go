@@ -126,7 +126,6 @@ func (httpClient *HttpGameClient) Status() (*GameStatus, error) {
 	if err != nil {
 		fmt.Printf("error decoding http request: %s\n", err)
 	}
-	fmt.Print(httpClient.Client)
 	return &gameStatus, err
 }
 
