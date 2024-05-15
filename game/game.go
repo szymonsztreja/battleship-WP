@@ -2,12 +2,15 @@ package game
 
 import (
 	"battleship-WP/client"
+	"context"
 	"fmt"
 	"net/http"
-	"time"
 
-	board "github.com/grupawp/warships-lightgui/v2"
+	gui "github.com/grupawp/warships-gui/v2"
 )
+
+// 300ms error
+// 503 errors make two more requests
 
 type Game struct {
 }
@@ -16,75 +19,93 @@ func (Game) Run() {
 	httpClient := &client.HttpGameClient{
 		Client: &http.Client{},
 	}
-	gameStatus := &client.GameStatus{}
-	var err error
+	// gameStatus := &client.GameStatus{}
+	// var err error
 
 	httpClient.InitGame()
-	waitForGame(httpClient)
+	// waitForGame(httpClient)
 	yourShips := getBoardGame(httpClient)
 
-	b := board.New(board.NewConfig())
-	err = b.Import(yourShips)
-	if err != nil {
-		fmt.Println(err)
-	}
-	for {
-		status := getGameStatus(httpClient)
+	ui := gui.NewGUI(true)
+	yourBoard := gui.NewBoard(5, 5, nil)
+	enemyBoard := gui.NewBoard(55, 5, nil)
 
-		if status.GameStatus == "ended" {
-			fmt.Print("Game ended")
-			return
-		}
-		if status.ShouldFire {
-			handleOppShots(gameStatus, b)
-			b.Display()
-			fmt.Println("Your turn!")
-			handleYourShots(httpClient, b)
-		} else {
-			time.Sleep(1 * time.Second)
-		}
+	//Example: states[0][0] is the state of the field A1.
+
+	states := [10][10]gui.State{}
+	for i := range states {
+		states[i] = [10]gui.State{}
 	}
+
+	yourBoard.SetStates(states)
+	enemyBoard.SetStates(states)
+
+	ui.Draw(yourBoard)
+	ui.Draw(enemyBoard)
+
+	ctx := context.Background()
+	ui.Start(ctx, nil)
+	// err = ui.Import(yourShips)
+	// if err != nil {
+	// 	fmt.Println(err)
+	// }
+	// for {
+	// 	status := getGameStatus(httpClient)
+
+	// 	if status.GameStatus == "ended" {
+	// 		fmt.Print("Game ended")
+	// 		return
+	// 	}
+	// 	if status.ShouldFire {
+	// 		handleOppShots(gameStatus, b)
+	// 		b.Display()
+	// 		fmt.Println("Your turn!")
+	// 		handleYourShots(httpClient, b)
+	// 	} else {
+	// 		time.Sleep(1 * time.Second)
+	// 	}
+	// }
 }
 
-func handleYourShots(httpClient *client.HttpGameClient, b *board.Board) {
-	var err error
-	var prompt string
-	yourShot, ok := board.ReadLineWithTimer(prompt, 60*time.Second)
-	if !ok {
-		fmt.Printf("There was a problem with reading line %v", ok)
-	}
+// func handleYourShots(httpClient *client.HttpGameClient, b *board.Board) {
+// 	var err error
+// 	var prompt string
+// 	yourShot, ok := board.ReadLineWithTimer(prompt, 60*time.Second)
+// 	if !ok {
+// 		fmt.Printf("There was a problem with reading line %v", ok)
+// 	}
 
-	fireResponse, err := httpClient.Fire(yourShot)
-	if err != nil {
-		fmt.Println(err)
-	}
-	SetRightBoard(fireResponse.Result, yourShot, b)
-}
+// 	fireResponse, err := httpClient.Fire(yourShot)
+// 	if err != nil {
+// 		fmt.Println(err)
+// 	}
+// 	SetRightBoard(fireResponse.Result, yourShot, b)
+// }
 
-func handleOppShots(gameStatus *client.GameStatus, b *board.Board) {
-	for _, shot := range gameStatus.OppShots {
+// func handleOppShots(gameStatus *client.GameStatus, b *board.Board) {
+// 	for _, shot := range gameStatus.OppShots {
 
-		state, err := b.HitOrMiss(board.Left, shot)
-		if err != nil {
-			fmt.Println(err)
-		}
+// 		state, err := b.HitOrMiss(board.Left, shot)
+// 		if err != nil {
+// 			fmt.Println(err)
+// 		}
 
-		err = b.Set(board.Left, shot, state)
-		if err != nil {
-			fmt.Println(err)
-		}
-	}
-}
+// 		err = b.Set(board.Left, shot, state)
+// 		if err != nil {
+// 			fmt.Println(err)
+// 		}
+// 	}
+// }
 
-func getGameStatus(httpClient *client.HttpGameClient) *client.GameStatus {
-	var err error
-	gameStatus, err := httpClient.Status()
+// func getGameStatus(httpClient *client.HttpGameClient) *client.GameStatus {
+// 	var err error
+// 	gameStatus, err := httpClient.Status()
 
-	if err != nil {
-		fmt.Printf("error getting game status : %s\n", err)
-	}
-	return gameStatus
-}
+// 	if err != nil {
+// 		fmt.Printf("error getting game status : %s\n", err)
+// 	}
+// 	return gameStatus
+// }
 
 func getBoardGame(httpClient *client.HttpGameClient) []string {
 	ships, err := httpClient.Board()
@@ -94,17 +115,17 @@ func getBoardGame(httpClient *client.HttpGameClient) []string {
 	return ships
 }
 
-func waitForGame(httpClient *client.HttpGameClient) {
-	for {
-		status := getGameStatus(httpClient)
+// func waitForGame(httpClient *client.HttpGameClient) {
+// 	for {
+// 		status := getGameStatus(httpClient)
 
-		if status.GameStatus == "game_in_progress" {
-			break
-		}
+// 		if status.GameStatus == "game_in_progress" {
+// 			break
+// 		}
 
-		time.Sleep(1 * time.Second)
-	}
-}
+// 		time.Sleep(1 * time.Second)
+// 	}
+// }
 
 func SetRightBoard(s string, yourShot string, b *board.Board) {
 	var err error
@@ -126,3 +147,19 @@ func SetRightBoard(s string, yourShot string, b *board.Board) {
 		}
 	}
 }
+
+func StringCoordinatesToInt(coords []string ) {
+	stringCoords := [10]string{"A", "B", "C", "D", "E", "F", "G", "H", "I", "J"}
+	for idx, char := range stringCoords {
+		if 
+	}
+
+	for coord := range coords{
+		for idx, char := range stringCoords {
+			if coord[0] == char
+			
+		}
+	}
+}
+
+// A B C D E F G H I J 
