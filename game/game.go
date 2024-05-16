@@ -5,14 +5,14 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strconv"
+	"time"
 
 	gui "github.com/grupawp/warships-gui/v2"
 )
 
-// 300ms error
-// 503 errors make two more requests
-
 type Game struct {
+	// playerStates *[10][10]gui.State
 }
 
 func (Game) Run() {
@@ -20,92 +20,134 @@ func (Game) Run() {
 		Client: &http.Client{},
 	}
 	// gameStatus := &client.GameStatus{}
+	// playerStates := &[10][10]gui.State{}
 	// var err error
 
 	httpClient.InitGame()
-	// waitForGame(httpClient)
-	yourShips := getBoardGame(httpClient)
+	waitForGame(httpClient)
 
-	ui := gui.NewGUI(true)
-	yourBoard := gui.NewBoard(5, 5, nil)
-	enemyBoard := gui.NewBoard(55, 5, nil)
-
-	//Example: states[0][0] is the state of the field A1.
-
-	states := [10][10]gui.State{}
-	for i := range states {
-		states[i] = [10]gui.State{}
+	desc, err := httpClient.GetPlayersDescription()
+	if err != nil {
+		fmt.Print(err)
 	}
 
-	yourBoard.SetStates(states)
-	enemyBoard.SetStates(states)
+	playerShips := getBoardGame(httpClient)
 
-	ui.Draw(yourBoard)
+	ui := gui.NewGUI(true)
+	playerBoard := gui.NewBoard(5, 5, nil)
+	enemyBoard := gui.NewBoard(55, 5, nil)
+
+	playerStates := setPlayerBoard(playerShips)
+	enemyStates := [10][10]gui.State{}
+	for i := range enemyStates {
+		enemyStates[i] = [10]gui.State{}
+	}
+
+	playerBoard.SetStates(playerStates)
+	enemyBoard.SetStates(enemyStates)
+
+	ui.Draw(playerBoard)
 	ui.Draw(enemyBoard)
+
+	playerNick := gui.NewText(1, 1, desc.Nick, nil)
+	enemyNick := gui.NewText(55, 1, desc.Opponent, nil)
+	pDesc := gui.NewText(1, 30, desc.Desc, nil)
+	eDesc := gui.NewText(55, 30, desc.OppDesc, nil)
+	ui.Draw(playerNick)
+	ui.Draw(enemyNick)
+
+	ui.Draw(pDesc)
+	ui.Draw(eDesc)
 
 	ctx := context.Background()
 	ui.Start(ctx, nil)
-	// err = ui.Import(yourShips)
-	// if err != nil {
-	// 	fmt.Println(err)
-	// }
-	// for {
-	// 	status := getGameStatus(httpClient)
 
-	// 	if status.GameStatus == "ended" {
-	// 		fmt.Print("Game ended")
-	// 		return
-	// 	}
-	// 	if status.ShouldFire {
-	// 		handleOppShots(gameStatus, b)
-	// 		b.Display()
-	// 		fmt.Println("Your turn!")
-	// 		handleYourShots(httpClient, b)
-	// 	} else {
-	// 		time.Sleep(1 * time.Second)
-	// 	}
-	// }
+	// setupBoards(httpClient)
+	for {
+		status := getGameStatus(httpClient)
+		turn := gui.NewText(3, 3, "Your turn!", nil)
+
+		if status.GameStatus == "ended" {
+			fmt.Print("Game ended")
+			return
+		}
+		if status.ShouldFire {
+			handleOppShots(status.OppShots, &playerStates)
+			// updateDisplay()
+			playerBoard.SetStates(playerStates)
+			ui.Draw(playerBoard)
+			ui.Draw(turn)
+			handlePlayerShots(httpClient, enemyBoard, &enemyStates)
+			enemyBoard.SetStates(enemyStates)
+			ui.Draw(enemyBoard)
+		} else {
+			time.Sleep(1 * time.Second)
+			ui.Remove(turn)
+		}
+	}
 }
 
-// func handleYourShots(httpClient *client.HttpGameClient, b *board.Board) {
-// 	var err error
-// 	var prompt string
-// 	yourShot, ok := board.ReadLineWithTimer(prompt, 60*time.Second)
-// 	if !ok {
-// 		fmt.Printf("There was a problem with reading line %v", ok)
+// func setupBoards(httpClient *client.HttpGameClient) {
+// 	playerShips := getBoardGame(httpClient)
+
+// 	ui := gui.NewGUI(true)
+// 	playerBoard := gui.NewBoard(5, 5, nil)
+// 	enemyBoard := gui.NewBoard(55, 5, nil)
+
+// 	playerStates := setPlayerBoard(playerShips)
+// 	enemyStates := [10][10]gui.State{}
+// 	for i := range enemyStates {
+// 		enemyStates[i] = [10]gui.State{}
 // 	}
 
-// 	fireResponse, err := httpClient.Fire(yourShot)
-// 	if err != nil {
-// 		fmt.Println(err)
-// 	}
-// 	SetRightBoard(fireResponse.Result, yourShot, b)
+// 	playerBoard.SetStates(playerStates)
+// 	enemyBoard.SetStates(enemyStates)
+
+// 	ui.Draw(playerBoard)
+// 	ui.Draw(enemyBoard)
+
+// 	ctx := context.Background()
+// 	ui.Start(ctx, nil)
 // }
 
-// func handleOppShots(gameStatus *client.GameStatus, b *board.Board) {
-// 	for _, shot := range gameStatus.OppShots {
+func handlePlayerShots(httpClient *client.HttpGameClient, enemyBoard *gui.Board, enemyStates *[10][10]gui.State) {
+	coord := enemyBoard.Listen(context.Background())
 
-// 		state, err := b.HitOrMiss(board.Left, shot)
-// 		if err != nil {
-// 			fmt.Println(err)
-// 		}
+	fireResponse, err := httpClient.Fire(coord)
+	if err != nil {
+		fmt.Println(err)
+	}
 
-// 		err = b.Set(board.Left, shot, state)
-// 		if err != nil {
-// 			fmt.Println(err)
-// 		}
-// 	}
-// }
+	x, y := stringCoordToInt(coord)
 
-// func getGameStatus(httpClient *client.HttpGameClient) *client.GameStatus {
-// 	var err error
-// 	gameStatus, err := httpClient.Status()
+	switch fireResponse.Result {
+	case "hit":
+		enemyStates[x][y] = gui.Hit
+	case "miss":
+		enemyStates[x][y] = gui.Miss
+	case "sunk":
+		enemyStates[x][y] = gui.Hit
+	}
+}
 
-// 	if err != nil {
-// 		fmt.Printf("error getting game status : %s\n", err)
-// 	}
-// 	return gameStatus
-// }
+func handleOppShots(oppShots []string, pStates *[10][10]gui.State) {
+	for _, shot := range oppShots {
+		x, y := stringCoordToInt(shot)
+		if pStates[x][y] == gui.Ship {
+			pStates[x][y] = gui.Hit
+		}
+	}
+}
+
+func getGameStatus(httpClient *client.HttpGameClient) *client.GameStatus {
+	var err error
+	gameStatus, err := httpClient.Status()
+
+	if err != nil {
+		fmt.Printf("error getting game status : %s\n", err)
+	}
+	return gameStatus
+}
 
 func getBoardGame(httpClient *client.HttpGameClient) []string {
 	ships, err := httpClient.Board()
@@ -115,51 +157,45 @@ func getBoardGame(httpClient *client.HttpGameClient) []string {
 	return ships
 }
 
-// func waitForGame(httpClient *client.HttpGameClient) {
-// 	for {
-// 		status := getGameStatus(httpClient)
+func waitForGame(httpClient *client.HttpGameClient) {
+	for {
+		status := getGameStatus(httpClient)
 
-// 		if status.GameStatus == "game_in_progress" {
-// 			break
-// 		}
+		if status.GameStatus == "game_in_progress" {
+			break
+		}
 
-// 		time.Sleep(1 * time.Second)
-// 	}
-// }
-
-func SetRightBoard(s string, yourShot string, b *board.Board) {
-	var err error
-	switch s {
-	case "hit":
-		err = b.Set(board.Right, yourShot, board.Hit)
-		if err != nil {
-			fmt.Println(err)
-		}
-	case "miss":
-		err = b.Set(board.Right, yourShot, board.Miss)
-		if err != nil {
-			fmt.Println(err)
-		}
-	case "sunk":
-		err = b.Set(board.Right, yourShot, board.Hit)
-		if err != nil {
-			fmt.Println(err)
-		}
+		time.Sleep(1 * time.Second)
 	}
 }
 
-func StringCoordinatesToInt(coords []string ) {
-	stringCoords := [10]string{"A", "B", "C", "D", "E", "F", "G", "H", "I", "J"}
-	for idx, char := range stringCoords {
-		if 
+func setPlayerBoard(coords []string) [10][10]gui.State {
+	states := [10][10]gui.State{}
+	for i := range states {
+		states[i] = [10]gui.State{}
 	}
 
-	for coord := range coords{
-		for idx, char := range stringCoords {
-			if coord[0] == char
-			
-		}
+	for _, coord := range coords {
+		x, y := stringCoordToInt(coord)
+		states[x][y] = gui.Ship
 	}
+
+	return states
 }
 
-// A B C D E F G H I J 
+// Letters - rows, numbers - columns
+func stringCoordToInt(coord string) (int, int) {
+	// stringCoords := [10]string{"A", "B", "C", "D", "E", "F", "G", "H", "I", "J"}
+
+	column := int(coord[0] - 'A')
+
+	row, err := strconv.Atoi(coord[1:])
+	if err != nil {
+		fmt.Println(err)
+	}
+	row--
+
+	return column, row
+}
+
+// A B C D E F G H I J
