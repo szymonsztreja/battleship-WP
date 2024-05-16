@@ -77,7 +77,7 @@ func (Game) Run() {
 			playerBoard.SetStates(playerStates)
 			ui.Draw(playerBoard)
 			ui.Draw(turn)
-			handlePlayerShots(httpClient, enemyBoard, &enemyStates)
+			handlePlayerShots(httpClient, ctx, enemyBoard, &enemyStates)
 			enemyBoard.SetStates(enemyStates)
 			ui.Draw(enemyBoard)
 		} else {
@@ -110,9 +110,37 @@ func (Game) Run() {
 // 	ui.Start(ctx, nil)
 // }
 
-func handlePlayerShots(httpClient *client.HttpGameClient, enemyBoard *gui.Board, enemyStates *[10][10]gui.State) {
-	coord := enemyBoard.Listen(context.Background())
+func handlePlayerShots(httpClient *client.HttpGameClient, ctx context.Context, enemyBoard *gui.Board, enemyStates *[10][10]gui.State) {
 
+	// Start the timer
+	timer := time.NewTimer(60 * time.Second)
+
+	// Channel to signal when time is up
+	timerCh := make(chan bool)
+
+	// Goroutine to wait for the timer to expire
+	go func() {
+		<-timer.C
+		fmt.Println("Time's up!")
+		timerCh <- true
+	}()
+
+	select {
+	case <-timerCh:
+		fmt.Println("Shooting time expired")
+		// You can handle the case when the time expires here
+		return
+	case <-ctx.Done():
+		fmt.Println("Context canceled")
+		// Handle cancellation of context
+		return
+	case <-ctx.Done():
+		fmt.Println("Context canceled")
+		// Handle cancellation of context
+		return
+	}
+
+	coord := enemyBoard.Listen(ctx)
 	fireResponse, err := httpClient.Fire(coord)
 	if err != nil {
 		fmt.Println(err)

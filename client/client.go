@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 )
 
 //	type Post struct {
@@ -61,8 +62,11 @@ func (httpClient *HttpGameClient) makeRequest(req *http.Request) (*http.Response
 		}
 		if res.StatusCode != 200 {
 			handleResponseCode(res.StatusCode)
+			time.Sleep(250 * time.Millisecond)
+		} else {
+			break
 		}
-		break
+
 	}
 	return res, err
 }
