@@ -60,31 +60,51 @@ func (Game) Run() {
 	ui.Draw(eDesc)
 
 	ctx := context.Background()
+
+	go func() {
+		for {
+			status := getGameStatus(httpClient)
+			turn := gui.NewText(3, 3, "Your turn!", nil)
+			fmt.Print("duppppa")
+			if status.GameStatus == "ended" {
+				fmt.Print("Game ended")
+				ui.Log("Game ended")
+				return
+			}
+			if status.ShouldFire {
+				handleOppShots(status.OppShots, &playerStates)
+				// updateDisplay()
+				playerBoard.SetStates(playerStates)
+				ui.Draw(playerBoard)
+				ui.Draw(turn)
+				fmt.Print("I was here")
+				handlePlayerShots(httpClient, ctx, enemyBoard, &enemyStates)
+				coord := enemyBoard.Listen(ctx)
+
+				fireResponse, err := httpClient.Fire(coord)
+				if err != nil {
+					ui.Log(string(err.Error()))
+				}
+
+				x, y := stringCoordToInt(coord)
+
+				switch fireResponse.Result {
+				case "hit":
+					enemyStates[x][y] = gui.Hit
+				case "miss":
+					enemyStates[x][y] = gui.Miss
+				case "sunk":
+					enemyStates[x][y] = gui.Hit
+				}
+				enemyBoard.SetStates(enemyStates)
+				ui.Draw(enemyBoard)
+			} else {
+				time.Sleep(1 * time.Second)
+				ui.Remove(turn)
+			}
+		}
+	}()
 	ui.Start(ctx, nil)
-
-	// setupBoards(httpClient)
-	for {
-		status := getGameStatus(httpClient)
-		turn := gui.NewText(3, 3, "Your turn!", nil)
-
-		if status.GameStatus == "ended" {
-			fmt.Print("Game ended")
-			return
-		}
-		if status.ShouldFire {
-			handleOppShots(status.OppShots, &playerStates)
-			// updateDisplay()
-			playerBoard.SetStates(playerStates)
-			ui.Draw(playerBoard)
-			ui.Draw(turn)
-			handlePlayerShots(httpClient, ctx, enemyBoard, &enemyStates)
-			enemyBoard.SetStates(enemyStates)
-			ui.Draw(enemyBoard)
-		} else {
-			time.Sleep(1 * time.Second)
-			ui.Remove(turn)
-		}
-	}
 }
 
 // func setupBoards(httpClient *client.HttpGameClient) {
@@ -137,7 +157,7 @@ func handlePlayerShots(httpClient *client.HttpGameClient, ctx context.Context, e
 	case <-ctx.Done():
 		fmt.Println("Context canceled")
 		// Handle cancellation of context
-		return
+		// return
 	}
 
 	coord := enemyBoard.Listen(ctx)
