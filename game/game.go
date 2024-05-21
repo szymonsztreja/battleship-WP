@@ -74,8 +74,7 @@ func (Game) Run() {
 				return
 			}
 			if status.ShouldFire {
-				handleOppShots(status.OppShots, playerBoard)
-				ui.Draw(playerBoard.Board)
+				handleOppShots(status.OppShots, playerBoard, ui)
 				ui.Draw(turn)
 				handlePlayerShots(httpClient, ctx, enemyBoard, ui)
 				ui.Draw(enemyBoard.Board)
@@ -88,31 +87,6 @@ func (Game) Run() {
 
 	ui.Start(ctx, nil)
 }
-
-// func handlePlayerShots(httpClient *client.HttpGameClient, ctx context.Context, eb *WarshipBoard, ui *gui.GUI) {
-// 	ctx, cancel := context.WithTimeout(ctx, time.Second*60)
-// 	defer cancel()
-
-// 	coord := eb.Board.Listen(ctx)
-
-// 	ui.Log(string(eb.GetState(coord)))
-// 	fmt.Print(eb.GetState(coord))
-
-// 	fireResponse, err := httpClient.Fire(coord)
-// 	if err != nil {
-// 		fmt.Println(err)
-// 	}
-
-// 	switch fireResponse.Result {
-// 	case "hit":
-// 		eb.UpdateState(coord, gui.Hit)
-// 	case "miss":
-// 		eb.UpdateState(coord, gui.Miss)
-// 	case "sunk":
-// 		eb.UpdateState(coord, gui.Hit)
-// 	}
-
-// }
 
 func handlePlayerShots(httpClient *client.HttpGameClient, ctx context.Context, eb *WarshipBoard, ui *gui.GUI) {
 
@@ -156,13 +130,14 @@ func handlePlayerShots(httpClient *client.HttpGameClient, ctx context.Context, e
 
 }
 
-func handleOppShots(oppShots []string, pb *WarshipBoard) {
+func handleOppShots(oppShots []string, pb *WarshipBoard, ui *gui.GUI) {
 	for _, shot := range oppShots {
 		if pb.GetState(shot) == gui.Ship {
 			pb.UpdateState(shot, gui.Hit)
 		} else {
 			pb.UpdateState(shot, gui.Miss)
 		}
+		ui.Draw(pb.Board)
 	}
 }
 
