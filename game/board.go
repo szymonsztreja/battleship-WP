@@ -16,7 +16,7 @@ type WarshipBoard struct {
 	Desc   *gui.Text
 }
 
-func NewWarshipBoard(x int, y int, c *gui.BoardConfig) *WarshipBoard {
+func NewWarshipBoard(x int, y int, xDesc int, c *gui.BoardConfig) *WarshipBoard {
 	wb := new(WarshipBoard)
 	wb.x = x
 	wb.y = y
@@ -24,7 +24,7 @@ func NewWarshipBoard(x int, y int, c *gui.BoardConfig) *WarshipBoard {
 	wb.Board = gui.NewBoard(x, y, c)
 	setArrayValue(&wb.states, gui.Empty)
 	wb.Board.SetStates(wb.states)
-	wb.Desc = gui.NewText(1, 30, "", nil)
+	wb.Desc = gui.NewText(xDesc, 30, "", nil)
 
 	return wb
 }

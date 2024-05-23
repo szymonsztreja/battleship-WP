@@ -4,17 +4,47 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"time"
 )
 
-//	type Post struct {
-//		Coords
-//		Desc
-//		Nick
-//		Target_nick
-//	}
+// body := []byte(`{
+// 	"coords": [
+// "A1",
+// "A3",
+// "B9",
+// "C7",
+// "D1",
+// "D2",
+// "D3",
+// "D4",
+// "D7",
+// "E7",
+// "F1",
+// "F2",
+// "F3",
+// "F5",
+// "G5",
+// "G8",
+// "G9",
+// "I4",
+// "J4",
+// "J8"
+// ],
+// "desc": "My first game",
+// "nick": "AAAAAAAAA",
+// "target_nick": "",
+// "wpbot": true
+// }`)
+
+type GameData struct {
+	Coords     []string `json:"coords"`
+	Desc       string   `json:"desc"`
+	Nick       string   `json:"nick"`
+	TargetNick string   `json:"target_nick"`
+	Wpbot      bool     `json:"wpbot"`
+}
+
 const retry = 5
 
 type HttpGameClient struct {
@@ -51,6 +81,23 @@ type PlayersDescription struct {
 	Opponent string `json:"opponent"`
 }
 
+type MessageResponse struct {
+	Message string `json:"message"`
+}
+
+type PlayerStatus struct {
+	GameStatus string `json:"game_status"`
+	Nick       string `json:"nick"`
+}
+
+type PlayerStats struct {
+	Games  int    `json:"games"`
+	Nick   string `json:"nick"`
+	Points int    `json:"points"`
+	Rank   int    `json:"rank"`
+	Wins   int    `json:"wins"`
+}
+
 func (httpClient *HttpGameClient) makeRequest(req *http.Request) (*http.Response, error) {
 	var res *http.Response
 	var err error
@@ -61,8 +108,8 @@ func (httpClient *HttpGameClient) makeRequest(req *http.Request) (*http.Response
 			continue
 		}
 		if res.StatusCode != 200 {
-			handleResponseCode(res.StatusCode)
-			time.Sleep(250 * time.Millisecond)
+			handleResponseCode(res.StatusCode, req)
+			time.Sleep(350 * time.Millisecond)
 		} else {
 			break
 		}
@@ -71,37 +118,13 @@ func (httpClient *HttpGameClient) makeRequest(req *http.Request) (*http.Response
 	return res, err
 }
 
-func (httpClient *HttpGameClient) InitGame() {
+func (httpClient *HttpGameClient) InitGame(gd GameData) {
 	posturl := "https://go-pjatk-server.fly.dev/api/game"
 
-	body := []byte(`{
-		"coords": [
-    "A1",
-    "A3",
-    "B9",
-    "C7",
-    "D1",
-    "D2",
-    "D3",
-    "D4",
-    "D7",
-    "E7",
-    "F1",
-    "F2",
-    "F3",
-    "F5",
-    "G5",
-    "G8",
-    "G9",
-    "I4",
-    "J4",
-    "J8"
-  ],
-  "desc": "My first game",
-  "nick": "AAAAAAAAA",
-  "target_nick": "",
-  "wpbot": true
-	}`)
+	body, err := json.Marshal(gd)
+	if err != nil {
+		fmt.Printf("error marshaling game data: %w", err)
+	}
 
 	req, err := http.NewRequest(http.MethodPost, posturl, bytes.NewBuffer(body))
 	if err != nil {
@@ -216,17 +239,119 @@ func (httpClient *HttpGameClient) GetPlayersDescription() (*PlayersDescription, 
 	return &desc, err
 }
 
-func handleResponseCode(statusCode int) {
+func (httpClient *HttpGameClient) RefreshSession() (*MessageResponse, error) {
+	requestURL := "https://go-pjatk-server.fly.dev/api/game/refresh"
+
+	req, _ := http.NewRequest("GET", requestURL, nil)
+	req.Header.Set("X-Auth-Token", httpClient.XAuthToken)
+	res, err := httpClient.makeRequest(req)
+
+	if err != nil {
+		fmt.Printf("error getting refresh request: %s\n", err)
+	}
+	defer res.Body.Close()
+
+	var refresh MessageResponse
+	err = json.NewDecoder(res.Body).Decode(&refresh)
+	if err != nil {
+		fmt.Printf("error decoding refresh request: %s\n", err)
+	}
+	return &refresh, err
+}
+
+func (httpClient *HttpGameClient) GetLobby() ([]PlayerStatus, error) {
+	requestURL := "https://go-pjatk-server.fly.dev/api/game/lobby"
+
+	req, _ := http.NewRequest("GET", requestURL, nil)
+	res, err := httpClient.makeRequest(req)
+
+	if err != nil {
+		fmt.Printf("error getting lobby request: %s\n", err)
+	}
+	defer res.Body.Close()
+
+	var lobby []PlayerStatus
+	fmt.Print(lobby)
+	err = json.NewDecoder(res.Body).Decode(&lobby)
+	if err != nil {
+		fmt.Printf("error decoding lobby request: %s\n", err)
+	}
+	return lobby, err
+}
+
+func (httpClient *HttpGameClient) GetTop10Players() (*[]PlayerStats, error) {
+	requestURL := "https://go-pjatk-server.fly.dev/api/game/stats"
+
+	req, _ := http.NewRequest("GET", requestURL, nil)
+	res, err := httpClient.makeRequest(req)
+
+	if err != nil {
+		fmt.Printf("error getting Top 10 players request: %s\n", err)
+	}
+	defer res.Body.Close()
+
+	var tp []PlayerStats
+	err = json.NewDecoder(res.Body).Decode(&tp)
+	if err != nil {
+		fmt.Printf("error decoding Top 10 playersrequest: %s\n", err)
+	}
+	return &tp, err
+}
+
+func (httpClient *HttpGameClient) GetPlayersStats(nick string) (*PlayerStats, error) {
+	requestURL := fmt.Sprintf("https://go-pjatk-server.fly.dev/api/game/stats/%v", nick)
+
+	req, _ := http.NewRequest("GET", requestURL, nil)
+	res, err := httpClient.makeRequest(req)
+
+	if err != nil {
+		fmt.Printf("error getting players stats: %s\n", err)
+	}
+	defer res.Body.Close()
+
+	var ps PlayerStats
+	err = json.NewDecoder(res.Body).Decode(&ps)
+	if err != nil {
+		fmt.Printf("error decoding player stats: %s\n", err)
+	}
+	return &ps, err
+}
+
+func (httpClient *HttpGameClient) AbandonGame() (*MessageResponse, error) {
+	requestURL := "https://go-pjatk-server.fly.dev/api/game/abandon"
+
+	req, _ := http.NewRequest(http.MethodDelete, requestURL, nil)
+	req.Header.Set("X-Auth-Token", httpClient.XAuthToken)
+	res, err := httpClient.makeRequest(req)
+
+	if err != nil {
+		fmt.Printf("error abandoning: %s\n", err)
+	}
+	defer res.Body.Close()
+
+	var message MessageResponse
+	err = json.NewDecoder(res.Body).Decode(&message)
+	if err != nil {
+		fmt.Printf("error decoding abandoning: %s\n", err)
+	}
+	return &message, err
+}
+
+func handleResponseCode(statusCode int, req *http.Request) string {
+	var httpResposneError string
 	switch statusCode {
 	case 401:
-		log.Println("Unauthorized: 401")
+		httpResposneError = "Unauthorized: 401"
 	case 400:
-		log.Println("Bad Request: 400")
+		httpResposneError = "Bad Request: 400"
 	case 403:
-		log.Println("Forbidden: 403")
+		httpResposneError = "Forbidden: 403"
+	case 429:
+		httpResposneError = fmt.Sprintf("Too Many Requests: 429 URL: %s", req.URL)
 	case 503:
-		log.Println("Service Unavailable: 503")
+		httpResposneError = "Service Unavailable: 503"
 	default:
-		log.Printf("Unhandled status code: %d\n", statusCode)
+		httpResposneError = fmt.Sprintf("Unhandled status code: %d\n", statusCode)
 	}
+	return httpResposneError
 }

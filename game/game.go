@@ -20,14 +20,24 @@ import (
 
 type Game struct {
 	// playerStates *[10][10]gui.State
+	PlayerNick        string
+	PlayerDescription string
 }
 
-func (Game) Run() {
+func (g *Game) Run() {
 	httpClient := &client.HttpGameClient{
 		Client: &http.Client{},
 	}
 
-	httpClient.InitGame()
+	gameData := client.GameData{
+		Coords:     []string{"A1", "A3", "B9", "C7", "D1", "D2", "D3", "D4", "D7", "E7", "F1", "F2", "F3", "F5", "G5", "G8", "G9", "I4", "J4", "J8"},
+		Desc:       g.PlayerDescription,
+		Nick:       g.PlayerNick,
+		TargetNick: "",
+		Wpbot:      true,
+	}
+
+	httpClient.InitGame(gameData)
 	waitForGame(httpClient)
 
 	desc, err := httpClient.GetPlayersDescription()
@@ -38,8 +48,8 @@ func (Game) Run() {
 	playerShips := getBoardGame(httpClient)
 	ui := gui.NewGUI(true)
 
-	playerBoard := NewWarshipBoard(5, 5, nil)
-	enemyBoard := NewWarshipBoard(55, 5, nil)
+	playerBoard := NewWarshipBoard(5, 5, 5, nil)
+	enemyBoard := NewWarshipBoard(55, 5, 55, nil)
 
 	playerBoard.Import(playerShips)
 	drawables := append(playerBoard.Drawables(), enemyBoard.Drawables()...)
@@ -63,71 +73,79 @@ func (Game) Run() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	turn := gui.NewText(47, 3, "", nil)
+	timer := gui.NewText(51, 1, "", nil)
+	endText := gui.NewText(51, 33, "Game ended", nil)
+
 	go func() {
 		for {
 			status := getGameStatus(httpClient)
-			turn := gui.NewText(3, 3, "Your turn!", nil)
 			if status.GameStatus == "ended" {
-				endText := gui.NewText(27, 33, "Game ended", nil)
+				endText.SetText("Gamee ended")
 				ui.Draw(endText)
 				ui.Log("Game ended")
 				return
 			}
-			if status.ShouldFire {
-				handleOppShots(status.OppShots, playerBoard, ui)
-				ui.Draw(turn)
-				handlePlayerShots(httpClient, ctx, enemyBoard, ui)
-				ui.Draw(enemyBoard.Board)
-			} else {
+			if !status.ShouldFire {
+				turn.SetText("Opponent turn!")
 				time.Sleep(1 * time.Second)
-				ui.Remove(turn)
+				timer.SetText("-")
+				ui.Draw(timer)
+			} else if status.ShouldFire {
+				turn.SetText("Your turn!")
+				timer.SetText(fmt.Sprint(status.Timer))
+				ui.Draw(timer)
+				ui.Draw(turn)
+				handleOppShots(status.OppShots, playerBoard, ui)
 			}
 		}
 	}()
 
+	go handlePlayerShots(ctx, httpClient, enemyBoard, ui)
+
 	ui.Start(ctx, nil)
 }
 
-func handlePlayerShots(httpClient *client.HttpGameClient, ctx context.Context, eb *WarshipBoard, ui *gui.GUI) {
-
-	// Create a context with a timeout of 60 seconds
+func handlePlayerShots(ctx context.Context, httpClient *client.HttpGameClient, enemyBoard *WarshipBoard, ui *gui.GUI) {
 	ctx, cancel := context.WithTimeout(ctx, time.Second*60)
 	defer cancel()
 
 	var coord string
-	var incorrectInput *gui.Text
+	incorrectInput := gui.NewText(30, 35, "", nil)
 
 	for {
-		// Listen for a coordinate input from the player
-		coord = eb.Board.Listen(ctx)
-		if eb.GetState(coord) != gui.Empty && incorrectInput == nil {
-			incorrectInput = gui.NewText(30, 35, "Please, click on an empty field!", nil)
-			ui.Draw(incorrectInput)
-		} else if eb.GetState(coord) == gui.Empty && incorrectInput != nil {
-			ui.Remove(incorrectInput)
-			break
-		} else {
-			break
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			for {
+				coord = enemyBoard.Board.Listen(ctx)
+				if enemyBoard.GetState(coord) != gui.Empty {
+					incorrectInput.SetText("Please, click on an empty field!")
+					ui.Draw(incorrectInput)
+				} else if enemyBoard.GetState(coord) == gui.Empty {
+					incorrectInput.SetText("")
+					break
+				}
+			}
+			ui.Log(string(enemyBoard.GetState(coord)))
+
+			fireResponse, err := httpClient.Fire(coord)
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+
+			switch fireResponse.Result {
+			case "hit":
+				enemyBoard.UpdateState(coord, gui.Hit)
+			case "miss":
+				enemyBoard.UpdateState(coord, gui.Miss)
+			case "sunk":
+				enemyBoard.UpdateState(coord, gui.Hit)
+			}
 		}
 	}
-
-	ui.Log(string(eb.GetState(coord)))
-
-	fireResponse, err := httpClient.Fire(coord)
-	if err != nil {
-		fmt.Println(err)
-	}
-
-	// Update the board based on the fire response
-	switch fireResponse.Result {
-	case "hit":
-		eb.UpdateState(coord, gui.Hit)
-	case "miss":
-		eb.UpdateState(coord, gui.Miss)
-	case "sunk":
-		eb.UpdateState(coord, gui.Hit)
-	}
-
 }
 
 func handleOppShots(oppShots []string, pb *WarshipBoard, ui *gui.GUI) {
@@ -170,58 +188,3 @@ func waitForGame(httpClient *client.HttpGameClient) {
 		time.Sleep(1 * time.Second)
 	}
 }
-
-// func setPlayerBoard(coords []string) [10][10]gui.State {
-// 	states := [10][10]gui.State{}
-// 	for i := range states {
-// 		states[i] = [10]gui.State{}
-// 	}
-
-// 	for _, coord := range coords {
-// 		x, y := stringCoordToInt(coord)
-// 		states[x][y] = gui.Ship
-// 	}
-
-// 	return states
-// }
-
-// Letters - rows, numbers - columns
-// func stringCoordToInt(coord string) (int, int, error) {
-// 	// stringCoords := [10]string{"A", "B", "C", "D", "E", "F", "G", "H", "I", "J"}
-
-// 	column := int(coord[0] - 'A')
-
-// 	row, err := strconv.Atoi(coord[1:])
-// 	if err != nil {
-// 		fmt.Println(err)
-// 		return 0, 0, err
-// 	}
-// 	row--
-
-// 	return column, row, nil
-// }
-
-// A B C D E F G H I J
-
-// func setupBoards(httpClient *client.HttpGameClient) {
-// 	playerShips := getBoardGame(httpClient)
-
-// 	ui := gui.NewGUI(true)
-// 	playerBoard := gui.NewBoard(5, 5, nil)
-// 	enemyBoard := gui.NewBoard(55, 5, nil)
-
-// 	playerStates := setPlayerBoard(playerShips)
-// 	enemyStates := [10][10]gui.State{}
-// 	for i := range enemyStates {
-// 		enemyStates[i] = [10]gui.State{}
-// 	}
-
-// 	playerBoard.SetStates(playerStates)
-// 	enemyBoard.SetStates(enemyStates)
-
-// 	ui.Draw(playerBoard)
-// 	ui.Draw(enemyBoard)
-
-// 	ctx := context.Background()
-// 	ui.Start(ctx, nil)
-// }
