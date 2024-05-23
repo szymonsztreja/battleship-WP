@@ -31,16 +31,6 @@ func (g *Game) Run() {
 	httpClient := &client.HttpGameClient{
 		Client: &http.Client{},
 	}
-
-	gameData := client.GameData{
-		Coords:     []string{"A1", "A3", "B9", "C7", "D1", "D2", "D3", "D4", "D7", "E7", "F1", "F2", "F3", "F5", "G5", "G8", "G9", "I4", "J4", "J8"},
-		Desc:       g.PlayerDescription,
-		Nick:       g.PlayerNick,
-		TargetNick: g.TargetNick,
-		Wpbot:      g.Wpbot,
-	}
-
-	httpClient.InitGame(gameData)
 	waitForGame(httpClient)
 
 	desc, err := httpClient.GetPlayersDescription()
@@ -80,11 +70,14 @@ func (g *Game) Run() {
 	timer := gui.NewText(51, 1, "", nil)
 	endText := gui.NewText(51, 33, "Game ended", nil)
 
-	go func() {
+	// done := make(chan struct{})
+
+	go handlePlayerShots(ctx, httpClient, enemyBoard, ui)
+	go func(ctx context.Context) {
 		for {
 			status := getGameStatus(httpClient)
 			if status.GameStatus == "ended" {
-				endText.SetText("Gamee ended")
+				endText.SetText(status.LastGameStatus)
 				ui.Draw(endText)
 				ui.Log("Game ended")
 				return
@@ -102,7 +95,7 @@ func (g *Game) Run() {
 				handleOppShots(status.OppShots, playerBoard, ui)
 			}
 		}
-	}()
+	}(ctx)
 
 	go handlePlayerShots(ctx, httpClient, enemyBoard, ui)
 
@@ -110,9 +103,6 @@ func (g *Game) Run() {
 }
 
 func handlePlayerShots(ctx context.Context, httpClient *client.HttpGameClient, enemyBoard *WarshipBoard, ui *gui.GUI) {
-	ctx, cancel := context.WithTimeout(ctx, time.Second*60)
-	defer cancel()
-
 	var coord string
 	incorrectInput := gui.NewText(30, 35, "", nil)
 
@@ -123,15 +113,21 @@ func handlePlayerShots(ctx context.Context, httpClient *client.HttpGameClient, e
 		default:
 			for {
 				coord = enemyBoard.Board.Listen(ctx)
+				ui.Log(coord)
+				if coord == "" {
+					incorrectInput.SetText("Invalid coordinate!")
+					ui.Draw(incorrectInput)
+					continue
+				}
 				if enemyBoard.GetState(coord) != gui.Empty {
 					incorrectInput.SetText("Please, click on an empty field!")
 					ui.Draw(incorrectInput)
-				} else if enemyBoard.GetState(coord) == gui.Empty {
+				} else {
 					incorrectInput.SetText("")
 					break
 				}
 			}
-			ui.Log(string(enemyBoard.GetState(coord)))
+			// ui.Log(string(enemyBoard.GetState(coord)))
 
 			fireResponse, err := httpClient.Fire(coord)
 			if err != nil {
@@ -146,8 +142,11 @@ func handlePlayerShots(ctx context.Context, httpClient *client.HttpGameClient, e
 				enemyBoard.UpdateState(coord, gui.Miss)
 			case "sunk":
 				enemyBoard.UpdateState(coord, gui.Hit)
+				enemyBoard.UpSunk(coord, nil)
 			}
+			// return
 		}
+
 	}
 }
 

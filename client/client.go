@@ -90,6 +90,10 @@ type PlayerStatus struct {
 	Nick       string `json:"nick"`
 }
 
+type Top10Players struct {
+	Stats []PlayerStats `json:"stats"`
+}
+
 type PlayerStats struct {
 	Games  int    `json:"games"`
 	Nick   string `json:"nick"`
@@ -278,7 +282,7 @@ func (httpClient *HttpGameClient) GetLobby() ([]PlayerStatus, error) {
 	return lobby, err
 }
 
-func (httpClient *HttpGameClient) GetTop10Players() ([]PlayerStats, error) {
+func (httpClient *HttpGameClient) GetTop10Players() (Top10Players, error) {
 	requestURL := "https://go-pjatk-server.fly.dev/api/stats"
 
 	req, _ := http.NewRequest("GET", requestURL, nil)
@@ -289,7 +293,7 @@ func (httpClient *HttpGameClient) GetTop10Players() ([]PlayerStats, error) {
 	}
 	defer res.Body.Close()
 
-	tp := []PlayerStats{}
+	var tp Top10Players
 	err = json.NewDecoder(res.Body).Decode(&tp)
 	if err != nil {
 		fmt.Printf("error decoding Top 10 playersrequest: %s\n", err)
@@ -297,7 +301,7 @@ func (httpClient *HttpGameClient) GetTop10Players() ([]PlayerStats, error) {
 	return tp, err
 }
 
-func (httpClient *HttpGameClient) GetPlayersStats(nick string) (*PlayerStats, error) {
+func (httpClient *HttpGameClient) GetPlayerStats(nick string) (*PlayerStats, error) {
 	requestURL := fmt.Sprintf("https://go-pjatk-server.fly.dev/api/stats/%v", nick)
 
 	req, _ := http.NewRequest("GET", requestURL, nil)
