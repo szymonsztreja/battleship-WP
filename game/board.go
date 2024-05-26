@@ -29,6 +29,18 @@ func NewWarshipBoard(x int, y int, xDesc int, c *gui.BoardConfig) *WarshipBoard 
 	return wb
 }
 
+//  TODO
+
+// func (wb *WarshipBoard) UpdateSunk(coord string, state gui.State) {
+// 	x, y, err := stringCoordToInt(coord)
+// 	if err != nil {
+// 		fmt.Printf("Error converting string to int board: %v", wb.Nick)
+// 	}
+
+// 	wb.states[x][y] = state
+// 	wb.Board.SetStates(wb.states)
+// }
+
 func (wb *WarshipBoard) UpdateState(coord string, state gui.State) {
 	x, y, err := stringCoordToInt(coord)
 	if err != nil {

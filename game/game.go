@@ -20,8 +20,11 @@ import (
 
 type Game struct {
 	// playerStates *[10][10]gui.State
+	// Coords            []string
 	PlayerNick        string
 	PlayerDescription string
+	TargetNick        string
+	Wpbot             bool
 }
 
 func (g *Game) Run() {
@@ -33,8 +36,8 @@ func (g *Game) Run() {
 		Coords:     []string{"A1", "A3", "B9", "C7", "D1", "D2", "D3", "D4", "D7", "E7", "F1", "F2", "F3", "F5", "G5", "G8", "G9", "I4", "J4", "J8"},
 		Desc:       g.PlayerDescription,
 		Nick:       g.PlayerNick,
-		TargetNick: "",
-		Wpbot:      true,
+		TargetNick: g.TargetNick,
+		Wpbot:      g.Wpbot,
 	}
 
 	httpClient.InitGame(gameData)
@@ -186,5 +189,35 @@ func waitForGame(httpClient *client.HttpGameClient) {
 		}
 
 		time.Sleep(1 * time.Second)
+	}
+}
+
+func NewGame(playerNick, playerDescription, targetNick string, wpbot *bool) *Game {
+	// Set default values
+	// defaultPlayerCoords := []
+	defaultPlayerNick := ""
+	defaultPlayerDescription := ""
+	defaultTargetNick := ""
+	defaultWpbot := false
+
+	// Use provided values if they are set, otherwise use defaults
+	if playerNick == "" {
+		playerNick = defaultPlayerNick
+	}
+	if playerDescription == "" {
+		playerDescription = defaultPlayerDescription
+	}
+	if targetNick == "" {
+		targetNick = defaultTargetNick
+	}
+	if wpbot == nil {
+		wpbot = &defaultWpbot
+	}
+
+	return &Game{
+		PlayerNick:        playerNick,
+		PlayerDescription: playerDescription,
+		TargetNick:        targetNick,
+		Wpbot:             *wpbot,
 	}
 }

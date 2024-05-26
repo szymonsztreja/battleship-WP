@@ -123,7 +123,7 @@ func (httpClient *HttpGameClient) InitGame(gd GameData) {
 
 	body, err := json.Marshal(gd)
 	if err != nil {
-		fmt.Printf("error marshaling game data: %w", err)
+		fmt.Printf("error marshaling game data: %v", err.Error())
 	}
 
 	req, err := http.NewRequest(http.MethodPost, posturl, bytes.NewBuffer(body))
@@ -260,7 +260,7 @@ func (httpClient *HttpGameClient) RefreshSession() (*MessageResponse, error) {
 }
 
 func (httpClient *HttpGameClient) GetLobby() ([]PlayerStatus, error) {
-	requestURL := "https://go-pjatk-server.fly.dev/api/game/lobby"
+	requestURL := "https://go-pjatk-server.fly.dev/api/lobby"
 
 	req, _ := http.NewRequest("GET", requestURL, nil)
 	res, err := httpClient.makeRequest(req)
@@ -270,8 +270,7 @@ func (httpClient *HttpGameClient) GetLobby() ([]PlayerStatus, error) {
 	}
 	defer res.Body.Close()
 
-	var lobby []PlayerStatus
-	fmt.Print(lobby)
+	lobby := []PlayerStatus{}
 	err = json.NewDecoder(res.Body).Decode(&lobby)
 	if err != nil {
 		fmt.Printf("error decoding lobby request: %s\n", err)
@@ -279,8 +278,8 @@ func (httpClient *HttpGameClient) GetLobby() ([]PlayerStatus, error) {
 	return lobby, err
 }
 
-func (httpClient *HttpGameClient) GetTop10Players() (*[]PlayerStats, error) {
-	requestURL := "https://go-pjatk-server.fly.dev/api/game/stats"
+func (httpClient *HttpGameClient) GetTop10Players() ([]PlayerStats, error) {
+	requestURL := "https://go-pjatk-server.fly.dev/api/stats"
 
 	req, _ := http.NewRequest("GET", requestURL, nil)
 	res, err := httpClient.makeRequest(req)
@@ -290,16 +289,16 @@ func (httpClient *HttpGameClient) GetTop10Players() (*[]PlayerStats, error) {
 	}
 	defer res.Body.Close()
 
-	var tp []PlayerStats
+	tp := []PlayerStats{}
 	err = json.NewDecoder(res.Body).Decode(&tp)
 	if err != nil {
 		fmt.Printf("error decoding Top 10 playersrequest: %s\n", err)
 	}
-	return &tp, err
+	return tp, err
 }
 
 func (httpClient *HttpGameClient) GetPlayersStats(nick string) (*PlayerStats, error) {
-	requestURL := fmt.Sprintf("https://go-pjatk-server.fly.dev/api/game/stats/%v", nick)
+	requestURL := fmt.Sprintf("https://go-pjatk-server.fly.dev/api/stats/%v", nick)
 
 	req, _ := http.NewRequest("GET", requestURL, nil)
 	res, err := httpClient.makeRequest(req)
