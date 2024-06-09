@@ -10,6 +10,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -19,26 +20,20 @@ type Menu struct {
 	// }
 	httpClient *client.HttpGameClient
 	game       *game.Game
+	player     *player
+}
+
+type player struct {
+	nick string
+	desc string
 }
 
 func (m *Menu) Start() {
 	m.httpClient = &client.HttpGameClient{
 		Client: &http.Client{},
 	}
-	m.game = &game.Game{}
+	m.player = &player{}
 
-	// Set your nick and description
-	// nick := playerInput("nick")
-	// desc := playerInput("description")
-	// println(nick, desc)
-
-	// game := game.Game{
-	// 	PlayerNick:        nick,
-	// 	PlayerDescription: desc,
-	// 	TargetNick:        "",
-	// 	Wpbot:             true,
-	// }
-	// game.Run()
 	for {
 		fmt.Println("Welcome to the Command Line Menu!")
 		fmt.Println("1. Set name and description")
@@ -57,7 +52,7 @@ func (m *Menu) Start() {
 			m.setNickAndDesc()
 		case 2:
 			fmt.Println("You chose: Play a game")
-			m.play()
+			m.playModes()
 		case 3:
 			fmt.Println("You chose: View Top 10 Players statistics")
 			m.getTop10Players()
@@ -71,7 +66,7 @@ func (m *Menu) Start() {
 
 }
 
-func (m *Menu) play() {
+func (m *Menu) playModes() {
 
 	for {
 		fmt.Println("Set your game mode!")
@@ -103,7 +98,12 @@ func (m *Menu) play() {
 }
 
 func (m *Menu) playWithBot() {
+	m.createGameInstance()
 	m.game.Wpbot = true
+	m.gameSetup()
+	fmt.Println("before watiing for game")
+	m.waitForGame()
+	fmt.Println("starting game")
 	m.game.Run()
 }
 
@@ -120,6 +120,7 @@ func (m *Menu) playWithPlayer() {
 	}
 
 	tn := m.handlePlayerChallenge(wp)
+	m.createGameInstance()
 	m.game.TargetNick = tn
 	m.gameSetup()
 	m.waitForGame()
@@ -130,11 +131,12 @@ func (m *Menu) setNickAndDesc() {
 	nick := playerInput("Type in your nick")
 	desc := playerInput("Type in your description")
 
-	m.game.PlayerNick = nick
-	m.game.PlayerDescription = desc
+	m.player.nick = nick
+	m.player.desc = desc
 }
 
 func (m *Menu) getChellengedByPlayer() {
+	m.createGameInstance()
 	m.game.Wpbot = false
 	m.gameSetup()
 	m.waitingForChallenge()
@@ -142,49 +144,69 @@ func (m *Menu) getChellengedByPlayer() {
 }
 
 func (m *Menu) waitingForChallenge() bool {
-	// Create a channel to receive the result
-	// statusChan := make(chan bool)
+	// Create an unbuffered channel to receive the result
+	done := make(chan bool)
+	ticker10Sec := time.NewTicker(10 * time.Second)
+	ticker1Sec := time.NewTicker(1 * time.Second)
+	var wg sync.WaitGroup
 
-	// // Status goroutine
-	// go func() {
-	// 	defer wg.Done() // Decrement WaitGroup counter when goroutine completes
-	// 	for {
-	// 		select {
-	// 		case <-done:
-	// 			return // Exit if signaled
-	// 		default:
-	// 			status, err := m.httpClient.Status()
-	// 			if err != nil {
-	// 				fmt.Println("Error waiting for challenge:", err)
-	// 				statusChan <- false // Send false in case of error
-	// 				return
-	// 			}
-	// 			if status.GameStatus == "game_in_progress" {
-	// 				statusChan <- true // Send true when the game is in progress
-	// 				return
-	// 			}
-	// 			time.Sleep(time.Second * 1)
-	// 		}
-	// 	}
-	// }()
+	// Increment WaitGroup counter
+	wg.Add(2)
 
-	// // Refreshing goroutine
-	// go func() {
-	// 	for {
-	// 		select {
-	// 		case <-done:
-	// 			return // Exit if signaled
-	// 		default:
-	// 			fmt.Println("Refreshing session!")
-	// 			m.httpClient.RefreshSession()
-	// 			time.Sleep(time.Second * 10)
-	// 		}
-	// 	}
-	// }()
+	// Status goroutine
+	go func() {
+		defer wg.Done()
+		for {
+			select {
+			case <-done:
+				ticker1Sec.Stop()
+				//return // Exit if signaled
 
-	// // Wait for a value on the channel
-	// return <-statusChan
-	return true
+			case <-ticker1Sec.C:
+				fmt.Println("getting status goroutine")
+				status, err := m.httpClient.Status()
+				if err != nil {
+					fmt.Println("Error waiting for challenge:", err)
+				}
+				if status.GameStatus == "game_in_progress" {
+					// Send true when the game is in progress
+					done <- true
+					fmt.Println("Game is in progress")
+					// case <-time.After(time.Second * 1):
+					// 	fmt.Println("Timeout sending true to done channel")
+					// return
+				}
+			}
+		}
+	}()
+
+	// Refreshing goroutine
+	go func() {
+		defer wg.Done()
+		for {
+			select {
+			case <-done:
+				ticker10Sec.Stop()
+				fmt.Println("exiting refreshing")
+				// return // Exit if signaled
+			case <-ticker10Sec.C:
+				fmt.Println("Refreshing session!")
+				res, err := m.httpClient.RefreshSession()
+				if err != nil {
+					fmt.Printf("Error refreshing session message: %v\n", res.Message)
+				}
+			}
+		}
+	}()
+
+	// Ensure cleanup even if the function exits prematurely
+	defer func() {
+		close(done) // Signal all goroutines to exit
+		wg.Wait()   // Wait for all goroutines to finish
+	}()
+
+	// Wait for a value on the channel
+	return <-done
 }
 
 func (m *Menu) getTop10Players() {
@@ -203,16 +225,21 @@ func (m *Menu) getTop10Players() {
 	}
 }
 
+func (m *Menu) createGameInstance() {
+	m.game = &game.Game{
+		HttpGameC: m.httpClient,
+	}
+}
+
 func (m *Menu) gameSetup() {
 	gameData := client.GameData{
 		Coords:     []string{"A1", "A3", "B9", "C7", "D1", "D2", "D3", "D4", "D7", "E7", "F1", "F2", "F3", "F5", "G5", "G8", "G9", "I4", "J4", "J8"},
-		Desc:       m.game.PlayerDescription,
-		Nick:       m.game.PlayerNick,
+		Desc:       m.player.desc,
+		Nick:       m.player.nick,
 		TargetNick: m.game.TargetNick,
 		Wpbot:      m.game.Wpbot,
 	}
 	m.httpClient.InitGame(gameData)
-	// waitForGame(m.httpClient)
 }
 
 func (m *Menu) waitForGame() {

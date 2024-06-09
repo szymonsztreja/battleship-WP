@@ -4,7 +4,6 @@ import (
 	"battleship-WP/client"
 	"context"
 	"fmt"
-	"net/http"
 	"time"
 
 	gui "github.com/grupawp/warships-gui/v2"
@@ -25,20 +24,16 @@ type Game struct {
 	PlayerDescription string
 	TargetNick        string
 	Wpbot             bool
+	HttpGameC         *client.HttpGameClient
 }
 
 func (g *Game) Run() {
-	httpClient := &client.HttpGameClient{
-		Client: &http.Client{},
-	}
-	waitForGame(httpClient)
-
-	desc, err := httpClient.GetPlayersDescription()
+	desc, err := g.HttpGameC.GetPlayersDescription()
 	if err != nil {
 		fmt.Print(err)
 	}
 
-	playerShips := getBoardGame(httpClient)
+	playerShips := getBoardGame(g.HttpGameC)
 	ui := gui.NewGUI(true)
 
 	playerBoard := NewWarshipBoard(5, 5, 5, nil)
@@ -72,12 +67,14 @@ func (g *Game) Run() {
 
 	// done := make(chan struct{})
 
-	go handlePlayerShots(ctx, httpClient, enemyBoard, ui)
+	go handlePlayerShots(ctx, g.HttpGameC, enemyBoard, ui)
 	go func(ctx context.Context) {
 		for {
-			status := getGameStatus(httpClient)
+			status := getGameStatus(g.HttpGameC)
 			if status.GameStatus == "ended" {
 				endText.SetText(status.LastGameStatus)
+				ui.Draw(playerBoard.Board)
+				ui.Draw(enemyBoard.Board)
 				ui.Draw(endText)
 				ui.Log("Game ended")
 				return
@@ -96,15 +93,16 @@ func (g *Game) Run() {
 			}
 		}
 	}(ctx)
-
-	go handlePlayerShots(ctx, httpClient, enemyBoard, ui)
-
 	ui.Start(ctx, nil)
 }
 
-func handlePlayerShots(ctx context.Context, httpClient *client.HttpGameClient, enemyBoard *WarshipBoard, ui *gui.GUI) {
+func handlePlayerShots(ctx context.Context, c *client.HttpGameClient, enemyBoard *WarshipBoard, ui *gui.GUI) {
 	var coord string
 	incorrectInput := gui.NewText(30, 35, "", nil)
+	accuracyText := gui.NewText(65, 3, "", nil)
+
+	var shotsMissed float32 = 0
+	var shotsHit float32 = 0
 
 	for {
 		select {
@@ -129,7 +127,7 @@ func handlePlayerShots(ctx context.Context, httpClient *client.HttpGameClient, e
 			}
 			// ui.Log(string(enemyBoard.GetState(coord)))
 
-			fireResponse, err := httpClient.Fire(coord)
+			fireResponse, err := c.Fire(coord)
 			if err != nil {
 				fmt.Println(err)
 				return
@@ -137,14 +135,28 @@ func handlePlayerShots(ctx context.Context, httpClient *client.HttpGameClient, e
 
 			switch fireResponse.Result {
 			case "hit":
+				shotsHit++
 				enemyBoard.UpdateState(coord, gui.Hit)
 			case "miss":
+				shotsMissed++
 				enemyBoard.UpdateState(coord, gui.Miss)
 			case "sunk":
+				shotsHit++
 				enemyBoard.UpdateState(coord, gui.Hit)
 				enemyBoard.UpSunk(coord, nil)
 			}
-			// return
+
+			// Set and display accuracy statistic on screen
+			var accuracyString string
+			if shotsMissed == 0 {
+				accuracyString = "N/A"
+			} else {
+				shotsTaken := shotsHit + shotsMissed
+				accuracy := (shotsHit / shotsTaken) * 100
+				accuracyString = fmt.Sprintf("Accuracy %.2f%% (%v/%v)", accuracy, shotsHit, shotsTaken)
+			}
+			accuracyText.SetText(accuracyString)
+			ui.Draw(accuracyText)
 		}
 
 	}
@@ -161,9 +173,9 @@ func handleOppShots(oppShots []string, pb *WarshipBoard, ui *gui.GUI) {
 	}
 }
 
-func getGameStatus(httpClient *client.HttpGameClient) *client.GameStatus {
+func getGameStatus(c *client.HttpGameClient) *client.GameStatus {
 	var err error
-	gameStatus, err := httpClient.Status()
+	gameStatus, err := c.Status()
 
 	if err != nil {
 		fmt.Printf("error getting game status : %s\n", err)
@@ -171,24 +183,12 @@ func getGameStatus(httpClient *client.HttpGameClient) *client.GameStatus {
 	return gameStatus
 }
 
-func getBoardGame(httpClient *client.HttpGameClient) []string {
-	ships, err := httpClient.Board()
+func getBoardGame(c *client.HttpGameClient) []string {
+	ships, err := c.Board()
 	if err != nil {
 		fmt.Printf("error getting game board: %s\n", err)
 	}
 	return ships
-}
-
-func waitForGame(httpClient *client.HttpGameClient) {
-	for {
-		status := getGameStatus(httpClient)
-
-		if status.GameStatus == "game_in_progress" {
-			break
-		}
-
-		time.Sleep(1 * time.Second)
-	}
 }
 
 func NewGame(playerNick, playerDescription, targetNick string, wpbot *bool) *Game {

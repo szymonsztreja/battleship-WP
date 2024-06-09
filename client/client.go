@@ -8,35 +8,6 @@ import (
 	"time"
 )
 
-// body := []byte(`{
-// 	"coords": [
-// "A1",
-// "A3",
-// "B9",
-// "C7",
-// "D1",
-// "D2",
-// "D3",
-// "D4",
-// "D7",
-// "E7",
-// "F1",
-// "F2",
-// "F3",
-// "F5",
-// "G5",
-// "G8",
-// "G9",
-// "I4",
-// "J4",
-// "J8"
-// ],
-// "desc": "My first game",
-// "nick": "AAAAAAAAA",
-// "target_nick": "",
-// "wpbot": true
-// }`)
-
 type GameData struct {
 	Coords     []string `json:"coords"`
 	Desc       string   `json:"desc"`
@@ -254,6 +225,12 @@ func (httpClient *HttpGameClient) RefreshSession() (*MessageResponse, error) {
 		fmt.Printf("error getting refresh request: %s\n", err)
 	}
 	defer res.Body.Close()
+
+	if res.StatusCode == 200 {
+		msgRes := &MessageResponse{}
+		msgRes.Message = ""
+		return msgRes, nil
+	}
 
 	var refresh MessageResponse
 	err = json.NewDecoder(res.Body).Decode(&refresh)
