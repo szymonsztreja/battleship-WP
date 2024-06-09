@@ -1,7 +1,6 @@
 package main
 
 import (
-	"battleship-WP/apicaller"
 	"battleship-WP/menu"
 )
 
@@ -12,8 +11,8 @@ func main() {
 	menu.Start()
 }
 
-func dupa() {
-	apicaller.Call()
-	// game := game.Game{}
-	// game.Run()
-}
+// func dupa() {
+// 	apicaller.Call()
+// 	// game := game.Game{}
+// 	// game.Run()
+// }

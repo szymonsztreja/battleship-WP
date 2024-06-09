@@ -3,6 +3,7 @@ package game
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	gui "github.com/grupawp/warships-gui/v2"
 )
@@ -13,7 +14,7 @@ type WarshipBoard struct {
 	Nick   *gui.Text
 	Board  *gui.Board
 	states [10][10]gui.State
-	Desc   *gui.Text
+	Desc   []*gui.Text
 }
 
 type sunkHelper struct {
@@ -30,12 +31,55 @@ func NewWarshipBoard(x int, y int, xDesc int, c *gui.BoardConfig) *WarshipBoard 
 	wb.Board = gui.NewBoard(x, y, c)
 	setArrayValue(&wb.states, gui.Empty)
 	wb.Board.SetStates(wb.states)
-	wb.Desc = gui.NewText(xDesc, 30, "", nil)
+	// wb.Desc = gui.NewText(xDesc, 30, "", nil)
+	wb.Desc = []*gui.Text{}
 
 	return wb
 }
 
 //  TODO
+
+func wrapText(text string, lineLength int) []string {
+	words := strings.Split(text, " ")
+	lines := []string{}
+	currentLine := ""
+
+	for _, word := range words {
+		if len(currentLine)+len(word)+1 > lineLength {
+			lines = append(lines, currentLine)
+			currentLine = word
+		} else {
+			if currentLine != "" {
+				currentLine += " "
+			}
+			currentLine += word
+		}
+	}
+	if currentLine != "" {
+		lines = append(lines, currentLine)
+	}
+
+	return lines
+}
+
+func (wb *WarshipBoard) SetDescText(desc string) {
+	lines := wrapText(desc, 44)
+	wb.Desc = []*gui.Text{}
+
+	for i, line := range lines {
+		wb.Desc = append(wb.Desc, gui.NewText(wb.x, 30+i*1, line, nil))
+	}
+}
+
+// // Update the description text with wrapping
+// func (wb *WarshipBoard) SetDescText(desc string) {
+// 	lines := wrapText(desc, 20)
+// 	wb.Desc = []*gui.Text{}
+
+// 	for i, line := range lines {
+// 		wb.Desc = append(wb.Desc, gui.NewText(wb.x, 30+i*2, line, nil)) // Adjusting y-coordinate for each line
+// 	}
+// }
 
 func (wb *WarshipBoard) UpdateSunk(coord string, state gui.State) {
 	x, y, err := stringCoordToInt(coord)
@@ -161,7 +205,7 @@ func stringCoordToInt(coord string) (int, int, error) {
 }
 
 func (wb *WarshipBoard) Drawables() []gui.Drawable {
-	return []gui.Drawable{wb.Nick, wb.Board, wb.Desc}
+	return []gui.Drawable{wb.Nick, wb.Board}
 }
 
 func setArrayValue(arr *[10][10]gui.State, value gui.State) {

@@ -310,6 +310,13 @@ func (httpClient *HttpGameClient) AbandonGame() (*MessageResponse, error) {
 	defer res.Body.Close()
 
 	var message MessageResponse
+
+	if res.StatusCode == 200 {
+		msgRes := &MessageResponse{}
+		msgRes.Message = ""
+		return msgRes, nil
+	}
+
 	err = json.NewDecoder(res.Body).Decode(&message)
 	if err != nil {
 		fmt.Printf("error decoding abandoning: %s\n", err)
