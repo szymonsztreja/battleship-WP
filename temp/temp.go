@@ -1,18 +1,20 @@
-package temp
+package client
 
 import (
 	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 )
 
-// type Post struct {
-// 	Coords
-// 	Desc
-// 	Nick
-// 	Target_nick
-// }
+//	type Post struct {
+//		Coords
+//		Desc
+//		Nick
+//		Target_nick
+//	}
+const retry = 5
 
 type HttpGameClient struct {
 	Client     *http.Client
@@ -48,11 +50,44 @@ type PlayersDescription struct {
 	Opponent string `json:"opponent"`
 }
 
-func (httpClient *HttpGameClient) InitGame() (int, error) {
+type RefreshResponse struct {
+	Message string `json:"message"`
+}
+
+type PlayerStatus struct {
+	GameStatus string `json:"game_status"`
+	Nick       string `json:"nick"`
+}
+
+// type Lobby struct {
+// 	Players []PlayerStatus
+// }
+
+func (httpClient *HttpGameClient) makeRequest(req *http.Request) (*http.Response, error) {
+	var res *http.Response
+	var err error
+	for i := 0; i < retry; i++ {
+		res, err = httpClient.Client.Do(req)
+		if err != nil {
+			fmt.Printf("Error making http request: %s\n", err)
+			continue
+		}
+		if res.StatusCode != 200 {
+			handleResponseCode(res.StatusCode, req)
+			time.Sleep(350 * time.Millisecond)
+		} else {
+			break
+		}
+
+	}
+	return res, err
+}
+
+func (httpClient *HttpGameClient) InitGame() {
 	posturl := "https://go-pjatk-server.fly.dev/api/game"
 
 	body := []byte(`{
-        "coords": [
+		"coords": [
     "A1",
     "A3",
     "B9",
@@ -78,7 +113,7 @@ func (httpClient *HttpGameClient) InitGame() (int, error) {
   "nick": "AAAAAAAAA",
   "target_nick": "",
   "wpbot": true
-    }`)
+	}`)
 
 	req, err := http.NewRequest(http.MethodPost, posturl, bytes.NewBuffer(body))
 	if err != nil {
@@ -87,7 +122,7 @@ func (httpClient *HttpGameClient) InitGame() (int, error) {
 
 	req.Header.Add("Content-Type", "application/json")
 
-	res, err := httpClient.Client.Do(req)
+	res, err := httpClient.makeRequest(req)
 	if err != nil {
 		panic(err)
 	}
@@ -97,16 +132,14 @@ func (httpClient *HttpGameClient) InitGame() (int, error) {
 	xAuthXAuthToken := res.Header.Get("X-Auth-Token")
 
 	httpClient.XAuthToken = xAuthXAuthToken
-
-	return res.StatusCode, err
 }
 
-func (httpClient *HttpGameClient) Board() ([]string, int, error) {
+func (httpClient *HttpGameClient) Board() ([]string, error) {
 	requestURL := "https://go-pjatk-server.fly.dev/api/game/board"
 
 	req, _ := http.NewRequest("GET", requestURL, nil)
 	req.Header.Set("X-Auth-Token", httpClient.XAuthToken)
-	res, err := httpClient.Client.Do(req)
+	res, err := httpClient.makeRequest(req)
 
 	if err != nil {
 		fmt.Printf("error making http request: %s\n", err)
@@ -120,15 +153,16 @@ func (httpClient *HttpGameClient) Board() ([]string, int, error) {
 		fmt.Printf("error decoding http request: %s\n", err)
 	}
 
-	return b.Board, res.StatusCode, err
+	return b.Board, err
 }
 
-func (httpClient *HttpGameClient) Status() (*GameStatus, int, error) {
+// *StatusResponse
+func (httpClient *HttpGameClient) Status() (*GameStatus, error) {
 	requestURL := "https://go-pjatk-server.fly.dev/api/game"
 
 	req, _ := http.NewRequest("GET", requestURL, nil)
 	req.Header.Set("X-Auth-Token", httpClient.XAuthToken)
-	res, err := httpClient.Client.Do(req)
+	res, err := httpClient.makeRequest(req)
 
 	if err != nil {
 		fmt.Printf("error making http request: %s\n", err)
@@ -140,10 +174,10 @@ func (httpClient *HttpGameClient) Status() (*GameStatus, int, error) {
 	if err != nil {
 		fmt.Printf("error decoding http request: %s\n", err)
 	}
-	return &gameStatus, res.StatusCode, err
+	return &gameStatus, err
 }
 
-func (httpClient *HttpGameClient) Fire(coord string) (*FireResponse, int, error) {
+func (httpClient *HttpGameClient) Fire(coord string) (*FireResponse, error) {
 	posturl := "https://go-pjatk-server.fly.dev/api/game/fire"
 
 	var fire FireStruct
@@ -158,7 +192,7 @@ func (httpClient *HttpGameClient) Fire(coord string) (*FireResponse, int, error)
 	req.Header.Set("X-Auth-Token", httpClient.XAuthToken)
 	req.Header.Set("Content-Type", "application/json")
 
-	res, err := httpClient.Client.Do(req)
+	res, err := httpClient.makeRequest(req)
 	if err != nil {
 		fmt.Printf("error getting http description request: %s\n", err)
 	}
@@ -171,15 +205,15 @@ func (httpClient *HttpGameClient) Fire(coord string) (*FireResponse, int, error)
 		fmt.Printf("error decoding http request: %s\n", err)
 	}
 
-	return &fireResponse, res.StatusCode, err
+	return &fireResponse, err
 }
 
-func (httpClient *HttpGameClient) GetPlayersDescription() (*PlayersDescription, int, error) {
+func (httpClient *HttpGameClient) GetPlayersDescription() (*PlayersDescription, error) {
 	requestURL := "https://go-pjatk-server.fly.dev/api/game/desc"
 
 	req, _ := http.NewRequest("GET", requestURL, nil)
 	req.Header.Set("X-Auth-Token", httpClient.XAuthToken)
-	res, err := httpClient.Client.Do(req)
+	res, err := httpClient.makeRequest(req)
 
 	if err != nil {
 		fmt.Printf("error getting http description request: %s\n", err)
@@ -191,5 +225,63 @@ func (httpClient *HttpGameClient) GetPlayersDescription() (*PlayersDescription, 
 	if err != nil {
 		fmt.Printf("error decoding http description request: %s\n", err)
 	}
-	return &desc, res.StatusCode, err
+	return &desc, err
+}
+
+func (httpClient *HttpGameClient) RefreshSession() (*RefreshResponse, error) {
+	requestURL := "https://go-pjatk-server.fly.dev/api/game/refresh"
+
+	req, _ := http.NewRequest("GET", requestURL, nil)
+	req.Header.Set("X-Auth-Token", httpClient.XAuthToken)
+	res, err := httpClient.makeRequest(req)
+
+	if err != nil {
+		fmt.Printf("error getting refresh request: %s\n", err)
+	}
+	defer res.Body.Close()
+
+	var refresh RefreshResponse
+	err = json.NewDecoder(res.Body).Decode(&refresh)
+	if err != nil {
+		fmt.Printf("error decoding refresh request: %s\n", err)
+	}
+	return &refresh, err
+}
+
+func (httpClient *HttpGameClient) GetLobby() (*[]PlayerStatus, error) {
+	requestURL := "https://go-pjatk-server.fly.dev/api/game/refresh"
+
+	req, _ := http.NewRequest("GET", requestURL, nil)
+	res, err := httpClient.makeRequest(req)
+
+	if err != nil {
+		fmt.Printf("error getting lobby request: %s\n", err)
+	}
+	defer res.Body.Close()
+
+	var lobby []PlayerStatus
+	err = json.NewDecoder(res.Body).Decode(&lobby)
+	if err != nil {
+		fmt.Printf("error decoding lobby request: %s\n", err)
+	}
+	return &lobby, err
+}
+
+func handleResponseCode(statusCode int, req *http.Request) string {
+	var httpResposneError string
+	switch statusCode {
+	case 401:
+		httpResposneError = "Unauthorized: 401"
+	case 400:
+		httpResposneError = "Bad Request: 400"
+	case 403:
+		httpResposneError = "Forbidden: 403"
+	case 429:
+		httpResposneError = fmt.Sprintf("Too Many Requests: 429 URL: %s", req.URL)
+	case 503:
+		httpResposneError = "Service Unavailable: 503"
+	default:
+		httpResposneError = fmt.Sprintf("Unhandled status code: %d\n", statusCode)
+	}
+	return httpResposneError
 }
