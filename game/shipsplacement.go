@@ -7,18 +7,16 @@ import (
 	gui "github.com/grupawp/warships-gui/v2"
 )
 
-// TODO go back after setting all the ships
-
 func PlaceShips() []string {
 	ui := gui.NewGUI(true)
 
-	txt := gui.NewText(1, 1, "Press on any coordinate to save it.", nil)
-	ui.Draw(txt)
-	ui.Draw(gui.NewText(1, 2, "Press Ctrl+C to exit", nil))
-	incorrectInput := gui.NewText(30, 3, "", nil)
+	ui.Draw(gui.NewText(10, 1, "Press on coordinates to set your board.", nil))
+	ui.Draw(gui.NewText(10, 2, "However you have to set your ship form biggest to smallest", nil))
+	ui.Draw(gui.NewText(10, 3, "Press Ctrl+C to exit", nil))
+	incorrectInput := gui.NewText(30, 5, "", nil)
 
 	coords := []string{}
-	board := NewWarshipBoard(5, 20, 5, nil)
+	board := NewWarshipBoard(20, 7, 5, nil)
 
 	drawables := append(board.Drawables(), board.Drawables()...)
 	drawables = append(drawables, incorrectInput)
@@ -27,12 +25,10 @@ func PlaceShips() []string {
 		ui.Draw(draw)
 	}
 
-	fmt.Println("DUppa")
-
 	ctx, cancel := context.WithCancel(context.TODO())
 	defer cancel()
 
-	// Fleet configuration
+	// Fleet
 	fleet := map[int]int{
 		4: 1, // One 4-mast ship
 		3: 2, // Two 3-mast ships
@@ -40,7 +36,7 @@ func PlaceShips() []string {
 		1: 4, // Four 1-mast ships
 	}
 
-	// Tracking placed ships
+	// To keep track of placed ships
 	placedShips := map[int]int{
 		4: 0,
 		3: 0,
@@ -92,7 +88,6 @@ func PlaceShips() []string {
 							ui.Draw(incorrectInput)
 							break
 						}
-
 						if placedShips[shipSize] >= fleet[shipSize] {
 							incorrectInput.SetText(fmt.Sprintf("No more %d-mast ships allowed!", shipSize))
 							ui.Log(fmt.Sprintf("No more %d-mast ships allowed: coord:%v!", shipSize, coord))
@@ -102,11 +97,12 @@ func PlaceShips() []string {
 							incorrectInput := gui.NewText(0, 0, "", nil)
 							ui.Remove(incorrectInput)
 							board.UpdateState(coord, gui.Ship)
-							// coords = append(coords, coord)
-							if shipSize >= 2 {
+							coords = append(coords, coord)
+							if shipSize > 0 {
 								placedShips[shipSize-1]--
 								placedShips[shipSize]++
 							}
+							shipsToPlace--
 							ui.Log(fmt.Sprintf("Updating ship of size %v, ships_amount %v", shipSize, placedShips[shipSize]))
 						}
 

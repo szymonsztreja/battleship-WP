@@ -42,7 +42,33 @@ func NewWarshipBoard(x int, y int, xDesc int, c *gui.BoardConfig) *WarshipBoard 
 	return wb
 }
 
-//  TODO
+func (wb *WarshipBoard) UpdateState(coord string, state gui.State) {
+	x, y, err := stringCoordToInt(coord)
+	if err != nil {
+		fmt.Printf("Error converting string to int board: x:%v, y:%v", x, y)
+	}
+
+	wb.states[x][y] = state
+	wb.Board.SetStates(wb.states)
+}
+
+func (wb *WarshipBoard) Import(coords []string) {
+	for _, coord := range coords {
+		x, y, err := stringCoordToInt(coord)
+		if err != nil {
+			fmt.Printf("Error importing board: x:%v, y:%v", x, y)
+		}
+		wb.states[x][y] = gui.Ship
+	}
+}
+
+func (wb *WarshipBoard) GetState(coord string) gui.State {
+	x, y, err := stringCoordToInt(coord)
+	if err != nil {
+		fmt.Printf("Error getting board state err: %v", err.Error())
+	}
+	return wb.states[x][y]
+}
 
 func wrapText(text string, lineLength int) []string {
 	words := strings.Split(text, " ")
@@ -76,29 +102,8 @@ func (wb *WarshipBoard) SetDescText(desc string) {
 	}
 }
 
-// // Update the description text with wrapping
-// func (wb *WarshipBoard) SetDescText(desc string) {
-// 	lines := wrapText(desc, 20)
-// 	wb.Desc = []*gui.Text{}
-
-// 	for i, line := range lines {
-// 		wb.Desc = append(wb.Desc, gui.NewText(wb.x, 30+i*2, line, nil)) // Adjusting y-coordinate for each line
-// 	}
-// }
-
-func (wb *WarshipBoard) UpdateSunk(coord string, state gui.State) {
-	x, y, err := stringCoordToInt(coord)
-	if err != nil {
-		fmt.Printf("Error updating sunk x:%v, y:%v", x, y)
-	}
-
-	wb.states[x][y] = state
-	wb.Board.SetStates(wb.states)
-
-}
-
-// markForbiddenArea marks the area around a sunk ship
-func (wb *WarshipBoard) UpSunk(coord string, statesToCheck []coordsToCheck) {
+// Mark as missed for sunken ship
+func (wb *WarshipBoard) UpdateSunk(coord string, statesToCheck []coordsToCheck) {
 	x, y, err := stringCoordToInt(coord)
 	if err != nil {
 		fmt.Printf("Error updating sunk x:%v, y:%v\n", x, y)
@@ -120,7 +125,7 @@ func (wb *WarshipBoard) UpSunk(coord string, statesToCheck []coordsToCheck) {
 		}
 	}
 
-	// Process the surrounding cells
+	// Check around the state
 	for dx := -1; dx <= 1; dx++ {
 		for dy := -1; dy <= 1; dy++ {
 			nx, ny := x+dx, y+dy
@@ -152,64 +157,15 @@ func (wb *WarshipBoard) UpSunk(coord string, statesToCheck []coordsToCheck) {
 	for _, state := range statesToCheck {
 		if !state.visited {
 			newCoord := intCoordToString(state.x, state.y)
-			wb.UpSunk(newCoord, statesToCheck)
+			wb.UpdateSunk(newCoord, statesToCheck)
 		}
 	}
 }
 
-func (wb *WarshipBoard) UpdateState(coord string, state gui.State) {
-	x, y, err := stringCoordToInt(coord)
-	if err != nil {
-		fmt.Printf("Error converting string to int board: x:%v, y:%v", x, y)
-	}
-
-	wb.states[x][y] = state
-	wb.Board.SetStates(wb.states)
-}
-
-func (wb *WarshipBoard) Import(coords []string) {
-	for _, coord := range coords {
-		x, y, err := stringCoordToInt(coord)
-		if err != nil {
-			fmt.Printf("Error importing board: x:%v, y:%v", x, y)
-		}
-		wb.states[x][y] = gui.Ship
-	}
-}
-
-func (wb *WarshipBoard) GetState(coord string) gui.State {
-	x, y, err := stringCoordToInt(coord)
-	if err != nil {
-		fmt.Printf("Error getting board state err: %v", err.Error())
-	}
-	return wb.states[x][y]
-}
-
-// Sprawdzenie, czy koordynaty są w granicach planszy
+// Are coords within bounds
 func (wb *WarshipBoard) IsWithinBounds(x, y int) bool {
 	return x >= 0 && y >= 0 && x < 10 && y < 10
 }
-
-// Sprawdzenie, czy koordynaty są puste
-func (wb *WarshipBoard) IsEmpty(x, y int) bool {
-	return wb.IsWithinBounds(x, y) && wb.states[y][x] == gui.Empty
-}
-
-// func (wb *WarshipBoard) IsPlacementValid(coords []string) bool {
-// 	for _, coord := range coords {
-// 		x, y, err := stringCoordToInt(coord)
-// 		if err != nil {
-// 			fmt.Printf("Error placement validation %d, %d\n", x, y)
-// 		}
-// 		if !wb.IsEmpty(x, y) {
-// 			return false
-// 		}
-// 		if !wb.HasAdjacentShip(x, y) {
-// 			return false
-// 		}
-// 	}
-// 	return true
-// }
 
 /*
 Check adjacent

@@ -169,7 +169,7 @@ func handlePlayerShots(ctx context.Context, c *client.HttpGameClient, enemyBoard
 			case "sunk":
 				shotsHit++
 				enemyBoard.UpdateState(coord, gui.Hit)
-				enemyBoard.UpSunk(coord, nil)
+				enemyBoard.UpdateSunk(coord, nil)
 			}
 
 			// Set and display accuracy statistic on screen
@@ -222,14 +222,11 @@ func drawNicksAndDesc(ui *gui.GUI, desc *client.PlayersDescription, playerBoard 
 	enemyBoard.SetDescText(desc.OppDesc)
 
 	ui.Draw(playerBoard.Nick)
-	// ui.Draw(playerBoard.Desc)
+	ui.Draw(enemyBoard.Nick)
 
 	for _, pd := range playerBoard.Desc {
 		ui.Draw(pd)
 	}
-
-	ui.Draw(enemyBoard.Nick)
-	// ui.Draw(enemyBoard.Desc)
 
 	for _, pd := range enemyBoard.Desc {
 		ui.Draw(pd)

@@ -11,7 +11,6 @@ import (
 	"os/exec"
 	"runtime"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 	// placeShips "battleship-WP/"
@@ -137,7 +136,7 @@ func (m *Menu) shipsMenu() {
 func (m *Menu) playModes() {
 
 	for {
-		ClearScreen()
+		// ClearScreen()
 		fmt.Println("Set your game mode!")
 		fmt.Println("1. Play with bot")
 		fmt.Println("2. Play with a player in lobby")
@@ -247,9 +246,6 @@ func (m *Menu) waitingForChallenge() bool {
 					// Send true when the game is in progress
 					gameInProgressCh <- true
 					fmt.Println("Game is in progress")
-					// case <-time.After(time.Second * 1):
-					// 	fmt.Println("Timeout sending true to done channel")
-					// return
 				}
 			}
 		}
@@ -312,7 +308,7 @@ func (m *Menu) resetGameInstance() {
 
 func (m *Menu) gameSetup() {
 	gameData := client.GameData{
-		Coords:     []string{"A1", "A3", "B9", "C7", "D1", "D2", "D3", "D4", "D7", "E7", "F1", "F2", "F3", "F5", "G5", "G8", "G9", "I4", "J4", "J8"},
+		Coords:     m.ships,
 		Desc:       m.player.desc,
 		Nick:       m.player.nick,
 		TargetNick: m.game.TargetNick,
@@ -334,34 +330,6 @@ func (m *Menu) waitForGame() {
 		}
 
 		time.Sleep(1 * time.Second)
-	}
-}
-
-func getYesOrNo(prompt string) bool {
-	// reader := bufio.NewReader(os.Stdin)
-	var output bool
-	fmt.Println(prompt)
-	for {
-		yesNo := playerInput("answer")
-
-		// Trim any leading or trailing whitespace
-		input := strings.TrimSpace(yesNo)
-
-		// Validate input
-		if input != "Y" && input != "N" {
-			fmt.Println("Please enter Y or N")
-			continue
-		}
-
-		if input == "Y" {
-			output = true
-		}
-
-		if input == "N" {
-			output = false
-		}
-
-		return output
 	}
 }
 
