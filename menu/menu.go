@@ -8,11 +8,15 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
+	"runtime"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
+	// placeShips "battleship-WP/"
 )
+
+var defaultShips = []string{"A1", "A3", "B9", "C7", "D1", "D2", "D3", "D4", "D7", "E7", "F1", "F2", "F3", "F5", "G5", "G8", "G9", "I4", "J4", "J8"}
 
 type Menu struct {
 	// httpClient := &client.HttpGameClient{
@@ -21,6 +25,7 @@ type Menu struct {
 	httpClient *client.HttpGameClient
 	game       *game.Game
 	player     *player
+	ships      []string
 }
 
 type player struct {
@@ -33,8 +38,10 @@ func (m *Menu) Start() {
 		Client: &http.Client{},
 	}
 	m.player = &player{}
+	m.ships = []string{}
 
 	for {
+		// ClearScreen()
 		fmt.Println("Welcome to the Command Line Menu!")
 		fmt.Println("1. Set name and description")
 		fmt.Println("2. Play a game")
@@ -52,7 +59,7 @@ func (m *Menu) Start() {
 			m.setNickAndDesc()
 		case 2:
 			fmt.Println("You chose: Play a game")
-			m.playModes()
+			m.playOrPlace()
 		case 3:
 			fmt.Println("You chose: View Top 10 Players statistics")
 			m.getTop10Players()
@@ -60,15 +67,76 @@ func (m *Menu) Start() {
 			fmt.Println("Exiting...")
 			os.Exit(0)
 		default:
-			fmt.Println("Invalid choice. Please choose a number between 1 and 4.")
+			fmt.Println("Invalid choice. Please choose a number. According to menu options")
 		}
 	}
 
 }
 
+func (m *Menu) playOrPlace() {
+	for {
+		// ClearScreen()
+		fmt.Println("Set your ships or select a game mode!")
+		fmt.Println("1. Game modes")
+		fmt.Println("2. Set ships")
+		fmt.Println("3. Go back")
+
+		choice := playerInput("")
+		option, err := strconv.Atoi(choice)
+		if err != nil {
+			fmt.Print(err)
+		}
+		switch option {
+		case 1:
+			fmt.Println("Games modes")
+			m.playModes()
+			return
+		case 2:
+			m.shipsMenu()
+			return
+		case 3:
+			fmt.Println("Returning")
+			return
+		default:
+			fmt.Println("Invalid choice. Please choose a number. According to menu options")
+		}
+	}
+}
+
+func (m *Menu) shipsMenu() {
+	for {
+		// ClearScreen()
+		fmt.Println("Set your ships!")
+		fmt.Println("1. Play with default ship placement")
+		fmt.Println("2. Set your own ships")
+		fmt.Println("3. Go back to play or place")
+
+		choice := playerInput("")
+		option, err := strconv.Atoi(choice)
+		if err != nil {
+			fmt.Print(err)
+		}
+		switch option {
+		case 1:
+			fmt.Println("Default ships")
+			m.ships = defaultShips
+		case 2:
+			fmt.Println("Setting your own ships")
+			m.ships = game.PlaceShips()
+		case 3:
+			fmt.Println("Returning")
+			return
+		default:
+			fmt.Println("Invalid choice. Please choose a number. According to menu options")
+
+		}
+	}
+}
+
 func (m *Menu) playModes() {
 
 	for {
+		// ClearScreen()
 		fmt.Println("Set your game mode!")
 		fmt.Println("1. Play with bot")
 		fmt.Println("2. Play with a player in lobby")
@@ -93,6 +161,8 @@ func (m *Menu) playModes() {
 		case 4:
 			fmt.Println("Returning")
 			return
+		default:
+			fmt.Println("Invalid choice. Please choose a number. According to menu options")
 		}
 	}
 }
@@ -105,6 +175,7 @@ func (m *Menu) playWithBot() {
 	m.waitForGame()
 	fmt.Println("starting game")
 	m.game.Run()
+	m.resetGameInstance()
 }
 
 func (m *Menu) playWithPlayer() {
@@ -125,6 +196,8 @@ func (m *Menu) playWithPlayer() {
 	m.gameSetup()
 	m.waitForGame()
 	m.game.Run()
+	m.resetGameInstance()
+
 }
 
 func (m *Menu) setNickAndDesc() {
@@ -141,11 +214,12 @@ func (m *Menu) getChellengedByPlayer() {
 	m.gameSetup()
 	m.waitingForChallenge()
 	m.game.Run()
+	m.resetGameInstance()
 }
 
 func (m *Menu) waitingForChallenge() bool {
 	// Create an unbuffered channel to receive the result
-	done := make(chan bool)
+	gameInProgressCh := make(chan bool)
 	ticker10Sec := time.NewTicker(10 * time.Second)
 	ticker1Sec := time.NewTicker(1 * time.Second)
 	var wg sync.WaitGroup
@@ -158,9 +232,9 @@ func (m *Menu) waitingForChallenge() bool {
 		defer wg.Done()
 		for {
 			select {
-			case <-done:
+			case <-gameInProgressCh:
 				ticker1Sec.Stop()
-				//return // Exit if signaled
+				return
 
 			case <-ticker1Sec.C:
 				fmt.Println("getting status goroutine")
@@ -170,11 +244,8 @@ func (m *Menu) waitingForChallenge() bool {
 				}
 				if status.GameStatus == "game_in_progress" {
 					// Send true when the game is in progress
-					done <- true
+					gameInProgressCh <- true
 					fmt.Println("Game is in progress")
-					// case <-time.After(time.Second * 1):
-					// 	fmt.Println("Timeout sending true to done channel")
-					// return
 				}
 			}
 		}
@@ -185,10 +256,10 @@ func (m *Menu) waitingForChallenge() bool {
 		defer wg.Done()
 		for {
 			select {
-			case <-done:
+			case <-gameInProgressCh:
 				ticker10Sec.Stop()
 				fmt.Println("exiting refreshing")
-				// return // Exit if signaled
+				return
 			case <-ticker10Sec.C:
 				fmt.Println("Refreshing session!")
 				res, err := m.httpClient.RefreshSession()
@@ -201,12 +272,12 @@ func (m *Menu) waitingForChallenge() bool {
 
 	// Ensure cleanup even if the function exits prematurely
 	defer func() {
-		close(done) // Signal all goroutines to exit
-		wg.Wait()   // Wait for all goroutines to finish
+		close(gameInProgressCh) // Signal all goroutines to exit
+		wg.Wait()               // Wait for all goroutines to finish
 	}()
 
 	// Wait for a value on the channel
-	return <-done
+	return <-gameInProgressCh
 }
 
 func (m *Menu) getTop10Players() {
@@ -231,9 +302,13 @@ func (m *Menu) createGameInstance() {
 	}
 }
 
+func (m *Menu) resetGameInstance() {
+	m.game = nil
+}
+
 func (m *Menu) gameSetup() {
 	gameData := client.GameData{
-		Coords:     []string{"A1", "A3", "B9", "C7", "D1", "D2", "D3", "D4", "D7", "E7", "F1", "F2", "F3", "F5", "G5", "G8", "G9", "I4", "J4", "J8"},
+		Coords:     m.ships,
 		Desc:       m.player.desc,
 		Nick:       m.player.nick,
 		TargetNick: m.game.TargetNick,
@@ -255,34 +330,6 @@ func (m *Menu) waitForGame() {
 		}
 
 		time.Sleep(1 * time.Second)
-	}
-}
-
-func getYesOrNo(prompt string) bool {
-	// reader := bufio.NewReader(os.Stdin)
-	var output bool
-	fmt.Println(prompt)
-	for {
-		yesNo := playerInput("answer")
-
-		// Trim any leading or trailing whitespace
-		input := strings.TrimSpace(yesNo)
-
-		// Validate input
-		if input != "Y" && input != "N" {
-			fmt.Println("Please enter Y or N")
-			continue
-		}
-
-		if input == "Y" {
-			output = true
-		}
-
-		if input == "N" {
-			output = false
-		}
-
-		return output
 	}
 }
 
@@ -331,4 +378,16 @@ func challengePlayerToDuel() string {
 	// challengeText := fmt.Sprint("enemies nick to challenge")
 	target_nick := playerInput("enemy nick to challenge: ")
 	return target_nick
+}
+
+func ClearScreen() {
+	if runtime.GOOS == "windows" {
+		cmd := exec.Command("cmd", "/c", "cls")
+		cmd.Stdout = os.Stdout
+		cmd.Run()
+	} else {
+		cmd := exec.Command("clear")
+		cmd.Stdout = os.Stdout
+		cmd.Run()
+	}
 }

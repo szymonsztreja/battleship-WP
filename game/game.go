@@ -9,6 +9,8 @@ import (
 	gui "github.com/grupawp/warships-gui/v2"
 )
 
+var defaultShips = []string{"A1", "A3", "B9", "C7", "D1", "D2", "D3", "D4", "D7", "E7", "F1", "F2", "F3", "F5", "G5", "G8", "G9", "I4", "J4", "J8"}
+
 // var color := gui.NewColor(232, 139, 0)
 
 // gui.Color{
@@ -18,8 +20,7 @@ import (
 // }
 
 type Game struct {
-	// playerStates *[10][10]gui.State
-	// Coords            []string
+	Coords            []string
 	PlayerNick        string
 	PlayerDescription string
 	TargetNick        string
@@ -46,54 +47,79 @@ func (g *Game) Run() {
 		ui.Draw(draw)
 	}
 
-	playerBoard.Nick.SetText(desc.Nick)
-	playerBoard.Desc.SetText(desc.Desc)
+	// playerBoard.Nick.SetText(desc.Nick)
+	// playerBoard.SetDescText(desc.Desc)
 
-	enemyBoard.Nick.SetText(desc.Opponent)
-	enemyBoard.Desc.SetText(desc.OppDesc)
+	// enemyBoard.Nick.SetText(desc.Opponent)
+	// enemyBoard.SetDescText(desc.OppDesc)
 
-	ui.Draw(playerBoard.Nick)
-	ui.Draw(playerBoard.Desc)
+	// ui.Draw(playerBoard.Nick)
+	// ui.Draw(playerBoard.Desc)
 
-	ui.Draw(enemyBoard.Nick)
-	ui.Draw(enemyBoard.Desc)
+	// ui.Draw(enemyBoard.Nick)
+	// ui.Draw(enemyBoard.Desc)
 
-	ctx, cancel := context.WithCancel(context.Background())
+	drawNicksAndDesc(ui, desc, playerBoard, enemyBoard)
+
+	ui.Log(g.HttpGameC.XAuthToken)
+
+	ctx, cancel := context.WithCancel(context.TODO())
 	defer cancel()
 
 	turn := gui.NewText(47, 3, "", nil)
 	timer := gui.NewText(51, 1, "", nil)
 	endText := gui.NewText(51, 33, "Game ended", nil)
 
-	// done := make(chan struct{})
-
+	// Send request to an api and cancel the game
+	// c := make(chan os.Signal, 1)
+	// signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	// go func() {
+	// 	<-c
+	// 	// <-ctx.Done()
+	// 	g.HttpGameC.AbandonGame()
+	// 	cancel()
+	// }()
+	// go quitGame(g, ui, cancel)
 	go handlePlayerShots(ctx, g.HttpGameC, enemyBoard, ui)
+	go handleOppShots(ctx, g.HttpGameC, playerBoard, ui)
 	go func(ctx context.Context) {
 		for {
-			status := getGameStatus(g.HttpGameC)
-			if status.GameStatus == "ended" {
-				endText.SetText(status.LastGameStatus)
-				ui.Draw(playerBoard.Board)
-				ui.Draw(enemyBoard.Board)
-				ui.Draw(endText)
-				ui.Log("Game ended")
+			select {
+			case <-ctx.Done():
 				return
+			default:
+				status := getGameStatus(g.HttpGameC)
+				if status.GameStatus == "ended" {
+					endText.SetText(status.LastGameStatus)
+					ui.Draw(playerBoard.Board)
+					ui.Draw(enemyBoard.Board)
+					ui.Draw(endText)
+					ui.Log("Game ended")
+					time.Sleep(2 * time.Second)
+					return
+				}
+				if !status.ShouldFire {
+					turn.SetText("Opponent turn!")
+					time.Sleep(500 * time.Millisecond)
+					timer.SetText("-")
+					ui.Draw(timer)
+				} else if status.ShouldFire {
+					turn.SetText("Your turn!")
+					timer.SetText(fmt.Sprint(status.Timer))
+					ui.Draw(timer)
+					ui.Draw(turn)
+				}
 			}
-			if !status.ShouldFire {
-				turn.SetText("Opponent turn!")
-				time.Sleep(1 * time.Second)
-				timer.SetText("-")
-				ui.Draw(timer)
-			} else if status.ShouldFire {
-				turn.SetText("Your turn!")
-				timer.SetText(fmt.Sprint(status.Timer))
-				ui.Draw(timer)
-				ui.Draw(turn)
-				handleOppShots(status.OppShots, playerBoard, ui)
-			}
+
 		}
 	}(ctx)
 	ui.Start(ctx, nil)
+
+	s := getGameStatus(g.HttpGameC)
+	// Send game quiting signal to an api
+	if s.GameStatus == "game_in_progress" {
+		g.HttpGameC.AbandonGame()
+	}
 }
 
 func handlePlayerShots(ctx context.Context, c *client.HttpGameClient, enemyBoard *WarshipBoard, ui *gui.GUI) {
@@ -143,7 +169,7 @@ func handlePlayerShots(ctx context.Context, c *client.HttpGameClient, enemyBoard
 			case "sunk":
 				shotsHit++
 				enemyBoard.UpdateState(coord, gui.Hit)
-				enemyBoard.UpSunk(coord, nil)
+				enemyBoard.UpdateSunk(coord, nil)
 			}
 
 			// Set and display accuracy statistic on screen
@@ -158,18 +184,52 @@ func handlePlayerShots(ctx context.Context, c *client.HttpGameClient, enemyBoard
 			accuracyText.SetText(accuracyString)
 			ui.Draw(accuracyText)
 		}
-
 	}
 }
 
-func handleOppShots(oppShots []string, pb *WarshipBoard, ui *gui.GUI) {
-	for _, shot := range oppShots {
-		if pb.GetState(shot) == gui.Ship {
-			pb.UpdateState(shot, gui.Hit)
-		} else {
-			pb.UpdateState(shot, gui.Miss)
+func handleOppShots(ctx context.Context, c *client.HttpGameClient, pb *WarshipBoard, ui *gui.GUI) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			// oppShotsCount = 0
+			status, err := c.Status()
+			if err != nil {
+				ui.Log("Error getting opp shots")
+			}
+			oppShots := status.OppShots
+			for _, shot := range oppShots {
+				if pb.GetState(shot) == gui.Ship {
+					pb.UpdateState(shot, gui.Hit)
+					ui.Draw(pb.Board)
+				} else if pb.GetState(shot) == gui.Empty {
+					pb.UpdateState(shot, gui.Miss)
+					ui.Draw(pb.Board)
+				}
+				// ui.Draw(pb.Board)
+			}
 		}
-		ui.Draw(pb.Board)
+	}
+
+}
+
+func drawNicksAndDesc(ui *gui.GUI, desc *client.PlayersDescription, playerBoard *WarshipBoard, enemyBoard *WarshipBoard) {
+	playerBoard.Nick.SetText(desc.Nick)
+	playerBoard.SetDescText(desc.Desc)
+
+	enemyBoard.Nick.SetText(desc.Opponent)
+	enemyBoard.SetDescText(desc.OppDesc)
+
+	ui.Draw(playerBoard.Nick)
+	ui.Draw(enemyBoard.Nick)
+
+	for _, pd := range playerBoard.Desc {
+		ui.Draw(pd)
+	}
+
+	for _, pd := range enemyBoard.Desc {
+		ui.Draw(pd)
 	}
 }
 
