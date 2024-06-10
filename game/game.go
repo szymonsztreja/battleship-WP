@@ -115,8 +115,11 @@ func (g *Game) Run() {
 	}(ctx)
 	ui.Start(ctx, nil)
 
+	s := getGameStatus(g.HttpGameC)
 	// Send game quiting signal to an api
-	g.HttpGameC.AbandonGame()
+	if s.GameStatus == "game_in_progress" {
+		g.HttpGameC.AbandonGame()
+	}
 }
 
 func handlePlayerShots(ctx context.Context, c *client.HttpGameClient, enemyBoard *WarshipBoard, ui *gui.GUI) {

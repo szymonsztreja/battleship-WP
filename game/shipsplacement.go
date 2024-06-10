@@ -15,6 +15,7 @@ func PlaceShips() []string {
 	txt := gui.NewText(1, 1, "Press on any coordinate to save it.", nil)
 	ui.Draw(txt)
 	ui.Draw(gui.NewText(1, 2, "Press Ctrl+C to exit", nil))
+	incorrectInput := gui.NewText(30, 3, "", nil)
 
 	coords := []string{}
 	board := NewWarshipBoard(5, 20, 5, nil)
@@ -30,10 +31,8 @@ func PlaceShips() []string {
 	ctx, cancel := context.WithCancel(context.TODO())
 	defer cancel()
 
-	// Example: Place 5 ships
 	shipsToPlace := 10
-	// shipsChan := make(chan string, shipsToPlace)
-	// areShipsSet := false
+	areShipsSet := false
 
 	go func(ctx context.Context) {
 		for {
@@ -46,15 +45,26 @@ func PlaceShips() []string {
 					ui.Log(coord)
 
 					if coord == "" {
-						incorrectInput := gui.NewText(0, 0, "Invalid coordinate!", nil)
+						incorrectInput.SetText("Invalid coordinate!")
 						ui.Draw(incorrectInput)
 						continue
 					}
-
-					if board.GetState(coord) != gui.Empty {
-						incorrectInput := gui.NewText(0, 0, "Please, click on an empty field!", nil)
+					state := board.GetState(coord)
+					// If state is other than gui.Miss
+					if state != gui.Empty && state != gui.Ship {
+						incorrectInput.SetText("Please, click on an empty field!")
 						ui.Draw(incorrectInput)
+						// If ship is already clicked, click on it to unset it
+					} else if state == gui.Ship {
+						board.UpdateState(coord, gui.Empty)
+						// Set empty state to ship
 					} else {
+						x, y := GetIntCoord(coord)
+						if board.checkDiagonally(x, y) && !board.HasAdjacentShip(x, y) {
+							incorrectInput.SetText("Ships cannot be diagonally!")
+							ui.Log(fmt.Sprintf("Ships cannot be diagonally: coord:%v!", coord))
+							break
+						}
 						incorrectInput := gui.NewText(0, 0, "", nil)
 						ui.Remove(incorrectInput)
 						board.UpdateState(coord, gui.Ship)
@@ -62,8 +72,12 @@ func PlaceShips() []string {
 						shipsToPlace--
 					}
 				} else {
-					return
+					areShipsSet = true
 				}
+			}
+			if areShipsSet {
+				ui.Log("Ships set!")
+				return
 			}
 		}
 	}(ctx)

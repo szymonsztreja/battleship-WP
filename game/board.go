@@ -17,7 +17,7 @@ type WarshipBoard struct {
 	Desc   []*gui.Text
 }
 
-type sunkHelper struct {
+type coordsToCheck struct {
 	x       int
 	y       int
 	visited bool
@@ -93,7 +93,7 @@ func (wb *WarshipBoard) UpdateSunk(coord string, state gui.State) {
 }
 
 // markForbiddenArea marks the area around a sunk ship
-func (wb *WarshipBoard) UpSunk(coord string, statesToCheck []sunkHelper) {
+func (wb *WarshipBoard) UpSunk(coord string, statesToCheck []coordsToCheck) {
 	x, y, err := stringCoordToInt(coord)
 	if err != nil {
 		fmt.Printf("Error updating sunk x:%v, y:%v\n", x, y)
@@ -101,7 +101,7 @@ func (wb *WarshipBoard) UpSunk(coord string, statesToCheck []sunkHelper) {
 	}
 
 	if statesToCheck == nil {
-		statesToCheck = []sunkHelper{}
+		statesToCheck = []coordsToCheck{}
 	}
 
 	// Check if the current coordinate has already been processed
@@ -133,7 +133,7 @@ func (wb *WarshipBoard) UpSunk(coord string, statesToCheck []sunkHelper) {
 						}
 					}
 					if !alreadyInStatesToCheck {
-						sunkState := sunkHelper{nx, ny, false}
+						sunkState := coordsToCheck{nx, ny, false}
 						statesToCheck = append(statesToCheck, sunkState)
 					}
 				}
@@ -180,10 +180,99 @@ func (wb *WarshipBoard) GetState(coord string) gui.State {
 	return wb.states[x][y]
 }
 
+// Sprawdzenie, czy koordynaty są w granicach planszy
+func (wb *WarshipBoard) IsWithinBounds(x, y int) bool {
+	return x >= 0 && y >= 0 && x < 10 && y < 10
+}
+
+// Sprawdzenie, czy koordynaty są puste
+func (wb *WarshipBoard) IsEmpty(x, y int) bool {
+	return wb.IsWithinBounds(x, y) && wb.states[y][x] == gui.Empty
+}
+
+func (wb *WarshipBoard) IsPlacementValid(coords []string) bool {
+	for _, coord := range coords {
+		x, y, err := stringCoordToInt(coord)
+		if err != nil {
+			fmt.Printf("Error placement validation %d, %d\n", x, y)
+		}
+		if !wb.IsEmpty(x, y) {
+			return false
+		}
+		if !wb.HasAdjacentShip(x, y) {
+			return false
+		}
+	}
+	return true
+}
+
+/*
+Check adjacent
+
+	(0,-1)
+
+(-1,0)	x	(1,0)
+
+	(0,1)
+*/
+func (wb *WarshipBoard) HasAdjacentShip(x, y int) bool {
+	dirs := []struct{ dx, dy int }{
+		{-1, 0}, {1, 0}, {0, -1}, {0, 1},
+	}
+	for _, dir := range dirs {
+		nx, ny := x+dir.dx, y+dir.dy
+		if wb.IsWithinBounds(nx, ny) && wb.states[ny][nx] == gui.Ship {
+			return true
+		}
+	}
+	return false
+}
+
+/*
+(-1,-1)   (1,-1)
+
+	x
+
+(-1, 1)   (1,1)
+*/
+func (wb *WarshipBoard) checkDiagonally(x, y int) bool {
+	// Define the diagonal directions
+	dirs := []struct{ dx, dy int }{
+		{-1, -1}, {1, -1}, {-1, 1}, {1, 1},
+	}
+
+	// Check each diagonal direction
+	for _, dir := range dirs {
+		nx, ny := x+dir.dx, y+dir.dy
+		if wb.IsWithinBounds(nx, ny) && wb.states[ny][nx] == gui.Ship {
+			return true
+		}
+	}
+	return false
+}
+
+// Funkcja sprawdzająca, czy dany kształt statku jest poprawny
+func (wb *WarshipBoard) isValidShape(coord string) bool {
+	x, y := GetIntCoord(coord)
+
+	tc := []coordsToCheck{}
+
+	wb
+}
+
 func intCoordToString(x int, y int) string {
 	column := string(rune(x + 'A'))
 	row := fmt.Sprint(y + 1)
 	return column + row
+}
+
+func GetIntCoord(coord string) (int, int) {
+	x, y, err := stringCoordToInt(coord)
+	if err != nil {
+		fmt.Printf("err getting int coord: %v", err.Error())
+		return 0, 0
+	}
+	return x, y
 }
 
 func stringCoordToInt(coord string) (int, int, error) {
