@@ -23,6 +23,11 @@ type coordsToCheck struct {
 	visited bool
 }
 
+type coords struct {
+	x int
+	y int
+}
+
 func NewWarshipBoard(x int, y int, xDesc int, c *gui.BoardConfig) *WarshipBoard {
 	wb := new(WarshipBoard)
 	wb.x = x
@@ -190,21 +195,21 @@ func (wb *WarshipBoard) IsEmpty(x, y int) bool {
 	return wb.IsWithinBounds(x, y) && wb.states[y][x] == gui.Empty
 }
 
-func (wb *WarshipBoard) IsPlacementValid(coords []string) bool {
-	for _, coord := range coords {
-		x, y, err := stringCoordToInt(coord)
-		if err != nil {
-			fmt.Printf("Error placement validation %d, %d\n", x, y)
-		}
-		if !wb.IsEmpty(x, y) {
-			return false
-		}
-		if !wb.HasAdjacentShip(x, y) {
-			return false
-		}
-	}
-	return true
-}
+// func (wb *WarshipBoard) IsPlacementValid(coords []string) bool {
+// 	for _, coord := range coords {
+// 		x, y, err := stringCoordToInt(coord)
+// 		if err != nil {
+// 			fmt.Printf("Error placement validation %d, %d\n", x, y)
+// 		}
+// 		if !wb.IsEmpty(x, y) {
+// 			return false
+// 		}
+// 		if !wb.HasAdjacentShip(x, y) {
+// 			return false
+// 		}
+// 	}
+// 	return true
+// }
 
 /*
 Check adjacent
@@ -215,17 +220,21 @@ Check adjacent
 
 	(0,1)
 */
-func (wb *WarshipBoard) HasAdjacentShip(x, y int) bool {
+func (wb *WarshipBoard) HasAdjacentShip(x, y int) (bool, []coords) {
 	dirs := []struct{ dx, dy int }{
 		{-1, 0}, {1, 0}, {0, -1}, {0, 1},
 	}
+
+	adjacent := []coords{}
+
 	for _, dir := range dirs {
 		nx, ny := x+dir.dx, y+dir.dy
-		if wb.IsWithinBounds(nx, ny) && wb.states[ny][nx] == gui.Ship {
-			return true
+		if wb.IsWithinBounds(nx, ny) && wb.states[nx][ny] == gui.Ship {
+			adjacent = append(adjacent, coords{nx, ny})
+			return true, adjacent
 		}
 	}
-	return false
+	return false, adjacent
 }
 
 /*
@@ -235,29 +244,111 @@ func (wb *WarshipBoard) HasAdjacentShip(x, y int) bool {
 
 (-1, 1)   (1,1)
 */
-func (wb *WarshipBoard) checkDiagonally(x, y int) bool {
+func (wb *WarshipBoard) checkDiagonally(x, y int) (bool, []coords) {
 	// Define the diagonal directions
 	dirs := []struct{ dx, dy int }{
 		{-1, -1}, {1, -1}, {-1, 1}, {1, 1},
 	}
 
+	diagonals := []coords{}
+
 	// Check each diagonal direction
 	for _, dir := range dirs {
 		nx, ny := x+dir.dx, y+dir.dy
-		if wb.IsWithinBounds(nx, ny) && wb.states[ny][nx] == gui.Ship {
-			return true
+		if wb.IsWithinBounds(nx, ny) && wb.states[nx][ny] == gui.Ship {
+			diagonals = append(diagonals, coords{nx, ny})
+			return true, diagonals
 		}
 	}
-	return false
+	return false, diagonals
 }
 
-// Funkcja sprawdzająca, czy dany kształt statku jest poprawny
+// Check if the ship shape is valid
 func (wb *WarshipBoard) isValidShape(coord string) bool {
 	x, y := GetIntCoord(coord)
 
-	tc := []coordsToCheck{}
+	isValid := false
 
-	wb
+	hasAdjacent, adjacentCoords := wb.HasAdjacentShip(x, y)
+	hasDiagonal, diagonalCoords := wb.checkDiagonally(x, y)
+
+	// fmt.Printf("hasAdjacent: %v, adjacentCoords: %v\n", hasAdjacent, adjacentCoords)
+	// fmt.Printf("hasDiagonal: %v, diagonalCoords: %v\n", hasDiagonal, diagonalCoords)
+	if hasAdjacent {
+		isValid = true
+		return isValid
+	} else if !hasAdjacent && !hasDiagonal {
+		// fmt.Println("Condition: !hasAdjacent && !hasDiagonal")
+		isValid = true
+	} else if !hasAdjacent && hasDiagonal {
+		// fmt.Println("Condition: !hasAdjacent && hasDiagonal")
+		isValid = false
+		// } else if hasAdjacent && !hasDiagonal {
+		// 	// fmt.Println("Condition: hasAdjacent && !hasDiagonal")
+		// 	isValid = true
+	} else if hasAdjacent && hasDiagonal {
+		fmt.Println("Condition: hasAdjacent && hasDiagonal")
+		// for _, ac := range adjacentCoords {
+		// Check if coords that are diagonal to our main coords
+		// have any common adjacent coord
+		for _, dc := range diagonalCoords {
+			dcHasAdjc, dcAdjcs := wb.HasAdjacentShip(dc.x, dc.y)
+			if !dcHasAdjc {
+				isValid = false
+			} else {
+				for _, dcAdjc := range dcAdjcs {
+					for _, ac := range adjacentCoords {
+						if dcAdjc.x == ac.x && dcAdjc.y == ac.y {
+							// fmt.Printf("Matching coordinates found: ac = %v, dc = %v\n", ac, dc)
+							isValid = true
+						}
+					}
+				}
+
+			}
+		}
+		// }
+	}
+	// fmt.Printf("isValid: %v\n", isValid)
+	return isValid
+}
+
+func (wb *WarshipBoard) getShipSize(coord string) int {
+	x, y := GetIntCoord(coord)
+	if !wb.IsWithinBounds(x, y) {
+		return 0
+	}
+
+	// Use a stack for DFS
+	stack := []coords{{x, y}}
+	visited := map[coords]bool{{x, y}: true}
+	size := 0
+
+	// All direction around the ship adjacent and digonal combined
+	dirs := []struct{ dx, dy int }{
+		{-1, 0}, {1, 0}, {0, -1}, {0, 1},
+		{-1, -1}, {1, -1}, {-1, 1}, {1, 1},
+	}
+
+	for len(stack) > 0 {
+		// fmt.Printf("stack size %v", stack)
+		c := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		size++
+
+		for _, dir := range dirs {
+			nx, ny := c.x+dir.dx, c.y+dir.dy
+			neighbor := coords{nx, ny}
+
+			if wb.IsWithinBounds(nx, ny) && wb.states[nx][ny] == gui.Ship && !visited[neighbor] {
+				stack = append(stack, neighbor)
+				visited[neighbor] = true
+			}
+		}
+	}
+
+	// fmt.Printf("Ship size at (%d, %d): %d\n", x, y, size)
+	return size
 }
 
 func intCoordToString(x int, y int) string {
