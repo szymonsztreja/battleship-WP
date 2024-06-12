@@ -88,6 +88,7 @@ func PlaceShips() []string {
 							ui.Draw(incorrectInput)
 							break
 						}
+						// Check if the all ships of particular size are set
 						if placedShips[shipSize] >= fleet[shipSize] {
 							incorrectInput.SetText(fmt.Sprintf("No more %d-mast ships allowed!", shipSize))
 							ui.Log(fmt.Sprintf("No more %d-mast ships allowed: coord:%v!", shipSize, coord))

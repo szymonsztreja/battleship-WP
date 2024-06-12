@@ -4,6 +4,7 @@ import (
 	"battleship-WP/client"
 	"battleship-WP/game"
 	"bufio"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -90,10 +91,8 @@ func (m *Menu) playOrPlace() {
 		case 1:
 			fmt.Println("Games modes")
 			m.playModes()
-			return
 		case 2:
 			m.shipsMenu()
-			return
 		case 3:
 			fmt.Println("Returning")
 			return
@@ -109,7 +108,8 @@ func (m *Menu) shipsMenu() {
 		fmt.Println("Set your ships!")
 		fmt.Println("1. Play with default ship placement")
 		fmt.Println("2. Set your own ships")
-		fmt.Println("3. Go back to play or place")
+		fmt.Println("3. Check ship placement")
+		fmt.Println("4. Go back to play or place")
 
 		choice := playerInput("")
 		option, err := strconv.Atoi(choice)
@@ -124,6 +124,12 @@ func (m *Menu) shipsMenu() {
 			fmt.Println("Setting your own ships")
 			m.ships = game.PlaceShips()
 		case 3:
+			if len(m.ships) < 20 {
+				fmt.Println("Ships not set or set incorectly")
+			} else {
+				fmt.Println("Ship set corectly. Ready to rumble")
+			}
+		case 4:
 			fmt.Println("Returning")
 			return
 		default:
@@ -170,8 +176,13 @@ func (m *Menu) playModes() {
 func (m *Menu) playWithBot() {
 	m.createGameInstance()
 	m.game.Wpbot = true
-	m.gameSetup()
-	fmt.Println("before watiing for game")
+	err := m.gameSetup()
+	if err != nil {
+		fmt.Println(err.Error())
+		return
+	}
+	fmt.Println(m.ships)
+	fmt.Println(m.httpClient.XAuthToken)
 	m.waitForGame()
 	fmt.Println("starting game")
 	m.game.Run()
@@ -193,7 +204,11 @@ func (m *Menu) playWithPlayer() {
 	tn := m.handlePlayerChallenge(wp)
 	m.createGameInstance()
 	m.game.TargetNick = tn
-	m.gameSetup()
+	err := m.gameSetup()
+	if err != nil {
+		fmt.Println(err.Error())
+		return
+	}
 	m.waitForGame()
 	m.game.Run()
 	m.resetGameInstance()
@@ -211,7 +226,11 @@ func (m *Menu) setNickAndDesc() {
 func (m *Menu) getChellengedByPlayer() {
 	m.createGameInstance()
 	m.game.Wpbot = false
-	m.gameSetup()
+	err := m.gameSetup()
+	if err != nil {
+		fmt.Println(err.Error())
+		return
+	}
 	m.waitingForChallenge()
 	m.game.Run()
 	m.resetGameInstance()
@@ -306,7 +325,9 @@ func (m *Menu) resetGameInstance() {
 	m.game = nil
 }
 
-func (m *Menu) gameSetup() {
+func (m *Menu) gameSetup() error {
+	var err error
+
 	gameData := client.GameData{
 		Coords:     m.ships,
 		Desc:       m.player.desc,
@@ -314,7 +335,13 @@ func (m *Menu) gameSetup() {
 		TargetNick: m.game.TargetNick,
 		Wpbot:      m.game.Wpbot,
 	}
-	m.httpClient.InitGame(gameData)
+	mes := m.httpClient.InitGame(gameData)
+
+	if mes != "" {
+		err = errors.New(mes)
+		return err
+	}
+	return err
 }
 
 func (m *Menu) waitForGame() {
@@ -375,7 +402,6 @@ func (m *Menu) waitingPlayers() []client.PlayerStatus {
 }
 
 func challengePlayerToDuel() string {
-	// challengeText := fmt.Sprint("enemies nick to challenge")
 	target_nick := playerInput("enemy nick to challenge: ")
 	return target_nick
 }
