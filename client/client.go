@@ -93,8 +93,10 @@ func (httpClient *HttpGameClient) makeRequest(req *http.Request) (*http.Response
 	return res, err
 }
 
-func (httpClient *HttpGameClient) InitGame(gd GameData) {
+func (httpClient *HttpGameClient) InitGame(gd GameData) string {
 	posturl := "https://go-pjatk-server.fly.dev/api/game"
+
+	var message string
 
 	body, err := json.Marshal(gd)
 	if err != nil {
@@ -110,7 +112,7 @@ func (httpClient *HttpGameClient) InitGame(gd GameData) {
 
 	res, err := httpClient.makeRequest(req)
 	if err != nil {
-		panic(err)
+		fmt.Println(err.Error())
 	}
 
 	defer res.Body.Close()
@@ -118,6 +120,11 @@ func (httpClient *HttpGameClient) InitGame(gd GameData) {
 	xAuthXAuthToken := res.Header.Get("X-Auth-Token")
 
 	httpClient.XAuthToken = xAuthXAuthToken
+
+	if res.StatusCode != 200 {
+		message = "Bad ship placement"
+	}
+	return message
 }
 
 func (httpClient *HttpGameClient) Board() ([]string, error) {

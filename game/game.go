@@ -11,14 +11,6 @@ import (
 
 var defaultShips = []string{"A1", "A3", "B9", "C7", "D1", "D2", "D3", "D4", "D7", "E7", "F1", "F2", "F3", "F5", "G5", "G8", "G9", "I4", "J4", "J8"}
 
-// var color := gui.NewColor(232, 139, 0)
-
-// gui.Color{
-// 	Red: 232
-// 	Green:139
-// 	Blue:0
-// }
-
 type Game struct {
 	Coords            []string
 	PlayerNick        string
@@ -47,18 +39,6 @@ func (g *Game) Run() {
 		ui.Draw(draw)
 	}
 
-	// playerBoard.Nick.SetText(desc.Nick)
-	// playerBoard.SetDescText(desc.Desc)
-
-	// enemyBoard.Nick.SetText(desc.Opponent)
-	// enemyBoard.SetDescText(desc.OppDesc)
-
-	// ui.Draw(playerBoard.Nick)
-	// ui.Draw(playerBoard.Desc)
-
-	// ui.Draw(enemyBoard.Nick)
-	// ui.Draw(enemyBoard.Desc)
-
 	drawNicksAndDesc(ui, desc, playerBoard, enemyBoard)
 
 	ui.Log(g.HttpGameC.XAuthToken)
@@ -68,18 +48,7 @@ func (g *Game) Run() {
 
 	turn := gui.NewText(47, 3, "", nil)
 	timer := gui.NewText(51, 1, "", nil)
-	endText := gui.NewText(51, 33, "Game ended", nil)
 
-	// Send request to an api and cancel the game
-	// c := make(chan os.Signal, 1)
-	// signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-	// go func() {
-	// 	<-c
-	// 	// <-ctx.Done()
-	// 	g.HttpGameC.AbandonGame()
-	// 	cancel()
-	// }()
-	// go quitGame(g, ui, cancel)
 	go handlePlayerShots(ctx, g.HttpGameC, enemyBoard, ui)
 	go handleOppShots(ctx, g.HttpGameC, playerBoard, ui)
 	go func(ctx context.Context) {
@@ -90,19 +59,18 @@ func (g *Game) Run() {
 			default:
 				status := getGameStatus(g.HttpGameC)
 				if status.GameStatus == "ended" {
-					endText.SetText(status.LastGameStatus)
+					turn.SetText(fmt.Sprintf("You %v", status.LastGameStatus))
 					ui.Draw(playerBoard.Board)
 					ui.Draw(enemyBoard.Board)
-					ui.Draw(endText)
 					ui.Log("Game ended")
 					time.Sleep(2 * time.Second)
 					return
 				}
 				if !status.ShouldFire {
 					turn.SetText("Opponent turn!")
-					time.Sleep(500 * time.Millisecond)
 					timer.SetText("-")
 					ui.Draw(timer)
+					time.Sleep(1000 * time.Millisecond)
 				} else if status.ShouldFire {
 					turn.SetText("Your turn!")
 					timer.SetText(fmt.Sprint(status.Timer))
@@ -123,6 +91,7 @@ func (g *Game) Run() {
 }
 
 func handlePlayerShots(ctx context.Context, c *client.HttpGameClient, enemyBoard *WarshipBoard, ui *gui.GUI) {
+	ui.Draw(enemyBoard.Board)
 	var coord string
 	incorrectInput := gui.NewText(30, 35, "", nil)
 	accuracyText := gui.NewText(65, 3, "", nil)
@@ -151,7 +120,6 @@ func handlePlayerShots(ctx context.Context, c *client.HttpGameClient, enemyBoard
 					break
 				}
 			}
-			// ui.Log(string(enemyBoard.GetState(coord)))
 
 			fireResponse, err := c.Fire(coord)
 			if err != nil {
@@ -188,6 +156,7 @@ func handlePlayerShots(ctx context.Context, c *client.HttpGameClient, enemyBoard
 }
 
 func handleOppShots(ctx context.Context, c *client.HttpGameClient, pb *WarshipBoard, ui *gui.GUI) {
+	ui.Draw(pb.Board)
 	for {
 		select {
 		case <-ctx.Done():
@@ -207,7 +176,6 @@ func handleOppShots(ctx context.Context, c *client.HttpGameClient, pb *WarshipBo
 					pb.UpdateState(shot, gui.Miss)
 					ui.Draw(pb.Board)
 				}
-				// ui.Draw(pb.Board)
 			}
 		}
 	}
